@@ -1,3 +1,5 @@
+import time
+
 class Keyer(object):
     """
     Use keydown and keyup as callbacks for triggering the decoder
@@ -32,6 +34,7 @@ class Keyer(object):
             self.keydownbuffer.remove(event)
         if self.all_keys_up():
             self.decoder(tuple(self.buffer))
+            self.buffer = []
 
 
     def keydown(self, event, timestamp):

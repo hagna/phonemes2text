@@ -33,8 +33,8 @@ class TestKeyer(unittest.TestCase):
         """
         Keyer.keydown appends to a keydownbuffer.
         """
-        self.k.keydown('A', 900)
-        self.k.keydown('B', 901)
+        self.k.keydown('A', 1001)
+        self.k.keydown('B', 1002)
         self.assertEquals(self.k.keydownbuffer, ['A', 'B'])
 
 
@@ -90,7 +90,8 @@ class TestKeyer(unittest.TestCase):
 
     def test_keyup_calls_decoder(self):
         """
-        Keyer.keyup calls decoder when all the keys are up.
+        Keyer.keyup calls decoder when all the keys are up and it
+        clears the buffer.
         """
         calls = []
         def fake(t):
@@ -101,3 +102,4 @@ class TestKeyer(unittest.TestCase):
         self.k.keyup('A', 10101)
         self.k.keyup('B', 10102)
         self.assertEquals(calls, [('A','B')])
+        self.assertEquals(self.k.buffer, [])
