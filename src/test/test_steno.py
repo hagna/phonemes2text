@@ -5,6 +5,7 @@ from steno import Keyer
 class TestKeyer(unittest.TestCase):
     def setUp(self):
         self.k = Keyer(None)
+        self.k.all_keys_up = lambda: False
 
 
     def test_keyup_basic(self):
@@ -42,6 +43,7 @@ class TestKeyer(unittest.TestCase):
         """
         Keyer.all_keys_up is True if keydownbuffer is empty.
         """
+        self.k = Keyer(None)
         self.k.keydownbuffer = [1,2,3]
         self.assertEquals(self.k.all_keys_up(), False)
         self.k.keydownbuffer = []
