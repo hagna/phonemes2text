@@ -1,6 +1,6 @@
 import pygame
 import pygame.font, pygame.time
-import os
+import os, sys
 from steno import Keyer
 
 
@@ -18,6 +18,18 @@ def helper_text():
         background.blit(text, textpos)
     else:
         print "sorry no font for you"
+
+try:
+    from espeak import espeak 
+    synth = espeak.synth
+    espeak.set_parameter(espeak.Parameter.Rate, 1)
+    espeak.set_parameter(espeak.Parameter.Volume, 100)
+    espeak.synth("hello there")
+    #print espeak.get_parameter("rate")
+except Exception, e:
+    print e
+    print "no espeak"
+    synth = None
 
 espeak_phonemes = {(4,): 'n', # consonants
                    (3,): 't',
@@ -60,10 +72,36 @@ espeak_phonemes = {(4,): 'n', # consonants
                    (0,3,5): 'ju:',
                    (0,2,4,5): 'OI'}
 
-def decoder(b):
-    l = list(b)
-    l.sort()
-    print espeak_phonemes.get(tuple(l), None)
+class FlushingDecoder:
+
+    def __init__(self, timeout):
+        self.timeout = timeout
+        self.buffer = []
+        self.lastdecode = 0
+
+    def flush(self):
+        if self.buffer:
+            s = ''.join(self.buffer)
+            synth("[[" + s + "]]", phonemes=True)
+            print "flush", s
+            self.buffer = []
+
+    def update(self, ticks):
+        self.ticks = ticks
+        n = self.ticks - self.lastdecode
+        if self.ticks - self.lastdecode > self.timeout:
+            self.flush()
+
+    def decoder(self, b):
+        self.lastdecode = self.ticks
+        l = list(b)
+        l.sort()
+        phone = espeak_phonemes.get(tuple(l), None)
+        if synth is None or phone is None:
+            print phone
+        else:
+            self.buffer.append(phone)
+            print self.buffer
 
 
 validkeys = {pygame.K_q:5,
@@ -82,7 +120,8 @@ def lookup(k):
     res = validkeys.get(k, None)
     return res
 
-keyer = Keyer(decoder, 1500)
+f = FlushingDecoder(500)
+keyer = Keyer(f.decoder, 1500)
 
 try:
     screen = pygame.display.set_mode((800, 600))
@@ -98,7 +137,8 @@ try:
     while True:
         clock.tick(60)
         t = pygame.time.get_ticks()
-        event = pygame.event.wait()
+        f.update(t)
+        event = pygame.event.poll()
         if event.type == pygame.QUIT:
             break
         if event.type in (KEYDOWN, KEYUP):
