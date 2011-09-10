@@ -1,5 +1,13 @@
-This project will convert phonemes to english text without homophone or word boundary errors.  Phonemes
-are those spoken by a three year old english speaking male who we'll refer to as AA.
+Dependecies are as follows:
+
+python-espeak
+python-pygame
+
+
+
+This program will convert phonemes to english text without homophone or word boundary errors.  Phonemes
+are those spoken by a three year old english speaking male who we'll refer to as AA.  Phoneme-to-Text Transcription 
+system with an Infinite Vocabulary might help, but at this point it's a decryption problem.
 
 
 http://www.ekatetra.com/downloads/Chorded_History_BuxtonChordKeyboards.pdf
