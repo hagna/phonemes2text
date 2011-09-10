@@ -1,13 +1,29 @@
 import pygame
-import pygame.font, pygame.time
+import pygame.font, pygame.time, pygame.fastevent, pygame.midi
+from pygame.midi import MIDIIN
 import os, sys
 from steno import Keyer
 
-
 from pygame.locals import *
 
+MIDI=False
 os.environ['SDL_VIDEO_CENTERED'] = '1'
 pygame.init()
+pygame.fastevent.init()
+event_poll = pygame.fastevent.poll
+event_post = pygame.fastevent.post
+
+if MIDI:
+    device_id = 5
+    pygame.midi.init()
+    if device_id is None:
+        input_id = pygame.midi.get_default_input_id()
+    else:
+        input_id = device_id
+
+    print ("using input_id :%s:" % input_id)
+    piano = pygame.midi.Input( input_id )
+
 
 
 #wp51 colors
@@ -67,19 +83,23 @@ def helper_text():
                                         bottom=30+i*20)
                 background.blit(text, textpos)
     else:
-        print "sorry no font for you"
+        print "no font for you"
 
 try:
     from espeak import espeak 
     synth = espeak.synth
-    espeak.set_parameter(espeak.Parameter.Rate, 10)
+    espeak.set_parameter(espeak.Parameter.Rate, 100)
     espeak.set_parameter(espeak.Parameter.Volume, 100)
-    espeak.synth("hello there")
+    espeak.set_voice('english-us')
+    espeak.synth("hello")
     #print espeak.get_parameter("rate")
 except Exception, e:
     print e
     print "no espeak"
     synth = None
+
+import itertools
+newvoice = itertools.cycle(['en-scottish', 'english', 'lancashire', 'english_rp', 'english_wmids', 'english-us', 'en-westindies']).next
 
 espeak_phonemes = {(4,): 'n', # consonants
                    (3,): 't',
@@ -133,7 +153,6 @@ class FlushingDecoder:
         if self.buffer:
             s = ''.join(self.buffer)
             synth("[[" + s + "]]", phonemes=True)
-            print "flush", s
             self.buffer = []
 
     def update(self, ticks):
@@ -154,7 +173,7 @@ class FlushingDecoder:
             print self.buffer
 
 
-validkeys = {pygame.K_q:5,
+keyboardkeymap = {pygame.K_q:5,
                  pygame.K_2:4,
                  pygame.K_3:3,
                  pygame.K_r:2,
@@ -166,9 +185,29 @@ validkeys = {pygame.K_q:5,
                  pygame.K_MINUS:4,
                  pygame.K_RIGHTBRACKET:5}
 
-def lookup(k):
+
+pianokeymap =  {
+                72:5,
+                70:4,
+                68:3,
+                66:2,
+                64:1,
+                62:0,
+                60:1,
+                58:2,
+                56:3,
+                54:4,
+                52:5,
+                }
+
+def lookup(k, validkeys=keyboardkeymap):
     res = validkeys.get(k, None)
     return res
+
+
+def lookup_piano(k):
+    return lookup(k, pianokeymap)
+
 
 f = FlushingDecoder(500)
 keyer = Keyer(f.decoder, 1500)
@@ -188,7 +227,17 @@ try:
         clock.tick(60)
         t = pygame.time.get_ticks()
         f.update(t)
-        event = pygame.event.poll()
+        event = event_poll()
+        if MIDI:
+            if piano.poll():
+                midi_events = piano.read(10)
+                # convert them into pygame events.
+                midi_evs = pygame.midi.midis2events(midi_events, piano.device_id)
+
+                for m_e in midi_evs:
+                    event_post( m_e )
+
+
         if event.type == pygame.QUIT:
             break
         if event.type in (KEYDOWN, KEYUP):
@@ -202,5 +251,18 @@ try:
             if event.type == KEYUP:
                 if z is not None:
                     keyer.keyup(z, t)
+        if event.type == MIDIIN:
+            note, vel = event.data1, event.data2
+            z = lookup_piano(note)
+            if vel > 0: # keydown
+                if z is not None:
+                    keyer.keydown(z, t)
+            if vel == 0: # keyup
+                if z is not None:
+                    keyer.keyup(z, t)
 finally:
+    if MIDI:
+        if piano:
+            del piano
+        pygame.midi.quit()
     pygame.quit()  # Keep this IDLE friendly 
