@@ -579,14 +579,6 @@ class FlushingDecoder:
 #     pygame.quit()  # Keep this IDLE friendly 
 
 
-class RunOptions(Options):
-    def getSynopsis(self):
-        return """port fqdn"""
-
-#     def parseArgs(self, ip, fqdn):
-#         self.ip = ip
-#         self.fqdn = fqdn
-
 class MulticastClientUDP(DatagramProtocol):
 
     def datagramReceived(self, datagram, address):
@@ -595,13 +587,54 @@ class MulticastClientUDP(DatagramProtocol):
         print address
 
 
+class Helloer(DatagramProtocol):
+
+    def __init__(self, host, port):
+        self.host = host
+        self.port = port
+
+
+    def startProtocol(self):
+        host = self.host
+        port = self.port
+        self.transport.connect(host, port)
+        print "now we can only send to host %s port %d" % (host, port)
+        self.transport.write("hello") # no need for address
+
+    def datagramReceived(self, data, (host, port)):
+        print "received %r from %s:%d" % (data, host, port)
+
+    def decoder(self, b):
+        z = ' '.join([str(k) for k in list(b)])
+        self.transport.write(z)
+
+    # Possibly invoked if there is no server listening on the
+    # address to which we are sending.
+    def connectionRefused(self):
+        print "No one listening"
+
+
+class RunOptions(Options):
+    def getSynopsis(self):
+        return """port fqdn"""
+
+    optFlags = [('multi', 'm', 'Enable multicast')]
+
+
+    def parseArgs(self, host, port):
+        self.host = host
+        self.port = int(port)
+
+
+
 class StartOptions(Options):
     def getSynopsis(self):
         return """Usage: %s scan|fetch|put""" % __file__
 
     subCommands = [
-        ('net', None, RunOptions, 'Send phonemes over the network.'),
+        ('udp', None, RunOptions, 'Send phonemes over the network.'),
         ]
+
 
 def parseCmdLine(argv):
     opt = StartOptions()
@@ -615,22 +648,29 @@ def parseCmdLine(argv):
 def main(reactor, argv):
     opt = parseCmdLine(argv)
     command = opt.subCommand
-    if command == 'net':
-        mcastUDP = MulticastClientUDP()
-        a = reactor.listenUDP(0, mcastUDP)
-        print a
-        print dir(a)
-        class Decoder:
-            def __init__(self, a):
-                self.a = a
+    so = opt.subOptions
+    if command == 'udp':
+        if so['multi']:
+            mcastUDP = MulticastClientUDP()
+            a = reactor.listenUDP(0, mcastUDP)
+            class Decoder:
+                def __init__(self, a):
+                    self.a = a
 
-            def decoder(self, b):
-                self.a.write(str(b), ('224.0.0.1', 8005))
+                def decoder(self, b):
+                    self.a.write(str(b), ('224.0.0.1', 8005))
 
-        w = Window(reactor)
-        w.submitTo(Controller(Decoder(a)))
-        d = w.go()
-        return d
+            w = Window(reactor)
+            w.submitTo(Controller(Decoder(a)))
+            d = w.go()
+            return d
+        else: 
+            h = Helloer(so.host, so.port)            
+            w = Window(reactor)
+            w.submitTo(Controller(h))
+            d = w.go()
+            reactor.listenUDP(0, h)
+            return d
 
     else:
         w = Window(reactor)
@@ -640,4 +680,7 @@ def main(reactor, argv):
 
 if __name__ == '__main__':
     react(reactor, main, sys.argv)
+
+from twisted.internet.protocol import DatagramProtocol
+from twisted.internet import reactor
 
