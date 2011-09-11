@@ -67,7 +67,7 @@ def helper_text():
 #                text = font.render(s, 1, gray)
 #                textpos = text.get_rect(left=10+k*200,
 #                                        bottom=30+i*20)
-        image, imagerect = load_image("mcs_phonemes.tiff")
+        image, imagerect = load_image("mcs_phonemes.bmp")
         background.blit(image, imagerect)
 #         text = font.render('b', gray)
 #         text = font.render('i', gray)
