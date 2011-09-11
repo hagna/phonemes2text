@@ -41,7 +41,7 @@ def helper_text():
                        's sin 2',
                        'd din 5',
                        'l let 1,4',
-                       'th this 2,3',
+                       'D this 2,3',
                        'z zen 3,4',
                        'm met 1,2',
                        'k kin 2,3,4',
@@ -59,7 +59,7 @@ def helper_text():
                        'j jam 1,4,5',
                        'th thin 1,2,4',
                        'zh azure 1,3,4,5']
-        vowels = ['a about 0',
+        vowels = ['@ about 0',
                   'is Dennis 0,4',
                   'o bob 0,2',
                   'i bit 0,1',
@@ -90,7 +90,7 @@ try:
     synth = espeak.synth
     espeak.set_parameter(espeak.Parameter.Rate, 100)
     espeak.set_parameter(espeak.Parameter.Volume, 100)
-    espeak.set_voice('english-us')
+    espeak.set_voice('mb-us1')
     espeak.synth("hello")
     #print espeak.get_parameter("rate")
 except Exception, e:
@@ -101,7 +101,8 @@ except Exception, e:
 import itertools
 newvoice = itertools.cycle(['en-scottish', 'english', 'lancashire', 'english_rp', 'english_wmids', 'english-us', 'en-westindies']).next
 
-espeak_phonemes = {(4,): 'n', # consonants
+
+espeak_consonants = {(4,): 'n', # consonants
                    (3,): 't',
                    (1,): 'r',
                    (2,): 's',
@@ -124,8 +125,9 @@ espeak_phonemes = {(4,): 'n', # consonants
                    (2,5): 'tS',
                    (1,4,5): 'dZ',
                    (1,2,4): 'T',
-                   (1,3,4,5): 'Z3',
-                   (0,): '@', # vowels
+                   (1,3,4,5): 'Z3'}
+
+espeak_vowels = {(0,): '@', # vowels
                    (0,4): 'I2',
                    (0,2): '0',
                    (0,1): 'I',
@@ -141,6 +143,12 @@ espeak_phonemes = {(4,): 'n', # consonants
                    (0,2,3,5): 'aU',
                    (0,3,5): 'ju:',
                    (0,2,4,5): 'OI'}
+
+espeak_phonemes = {}
+espeak_phonemes.update(espeak_vowels)
+espeak_phonemes.update(espeak_consonants)
+
+
 
 class FlushingDecoder:
 
@@ -173,17 +181,22 @@ class FlushingDecoder:
             print self.buffer
 
 
-keyboardkeymap = {pygame.K_q:5,
-                 pygame.K_2:4,
-                 pygame.K_3:3,
-                 pygame.K_r:2,
-                 pygame.K_v:1,
-                 pygame.K_SPACE:0,
-                 pygame.K_m:1,
-                 pygame.K_i:2,
-                 pygame.K_0:3,
-                 pygame.K_MINUS:4,
-                 pygame.K_RIGHTBRACKET:5}
+RHAND = [0,1,2,3,4,5]
+LHAND = [6,7,8,9,10,11]
+
+
+keyboardkeymap = {pygame.K_a:LHAND[5],
+                 pygame.K_w:LHAND[4],
+                 pygame.K_e:LHAND[3],
+                 pygame.K_r:LHAND[2],
+                 pygame.K_g:LHAND[1],
+                 pygame.K_v:LHAND[0],
+                 pygame.K_n:RHAND[0],
+                 pygame.K_h:RHAND[1],
+                 pygame.K_u:RHAND[2],
+                 pygame.K_i:RHAND[3],
+                 pygame.K_o:RHAND[4],
+                 pygame.K_SEMICOLON:RHAND[5]}
 
 
 pianokeymap =  {
@@ -210,7 +223,8 @@ def lookup_piano(k):
 
 
 f = FlushingDecoder(500)
-keyer = Keyer(f.decoder, 1500)
+lkeyer = Keyer(f.decoder, 1500)
+rkeyer = Keyer(f.decoder, 1500)
 
 try:
     screen = pygame.display.set_mode((800, 600))
@@ -246,15 +260,20 @@ try:
             if event.type == KEYDOWN:
                 if key == pygame.K_ESCAPE:
                     break
-                if z is not None:
-                    keyer.keydown(z, t)
+                if z in RHAND:
+                    rkeyer.keydown(z, t)
+                if z in LHAND:
+                    lkeyer.keydown(z-LHAND[0], t)
             if event.type == KEYUP:
-                if z is not None:
-                    keyer.keyup(z, t)
+                if z in RHAND:
+                    rkeyer.keyup(z, t)
+                if z in LHAND:
+                    lkeyer.keyup(z-LHAND[0], t)
         if event.type == MIDIIN:
             note, vel = event.data1, event.data2
             z = lookup_piano(note)
             if vel > 0: # keydown
+
                 if z is not None:
                     keyer.keydown(z, t)
             if vel == 0: # keyup
