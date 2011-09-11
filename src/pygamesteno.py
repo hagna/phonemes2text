@@ -1,5 +1,6 @@
 import pygame
 import pygame.font, pygame.time, pygame.fastevent, pygame.draw
+import json
 
 MIDI=True
 try:
@@ -41,63 +42,33 @@ gray = (170,170,170)
 red = (167,2,0)
 white = (255,255,255)
 
+def load_image(name, colorkey=None):
+    fullname = os.path.join('data', name)
+    try:
+        image = pygame.image.load(fullname)
+    except pygame.error, message:
+        print 'Cannot load image:', name
+        raise SystemExit, message
+    image = image.convert()
+    if colorkey is not None:
+        if colorkey is -1:
+            colorkey = image.get_at((0,0))
+        image.set_colorkey(colorkey, RLEACCEL)
+    return image, image.get_rect()
+
 
 def helper_text():
-    if pygame.font:
-        font = pygame.font.Font(None, 26)
-        consonants = ['net 4', 
-                      'tin 3',
-                       'r run 1',
-                       's sin 2',
-                       'd din 5',
-                       'l let 1,4',
-                       'D this 2,3',
-                       'z zen 3,4',
-                       'm met 1,2',
-                       'k kin 2,3,4',
-                       'v van 1,3',
-                       'w win 1,2,3,4',
-                       'p pin 1,2,3',
-                       'f fin 1,5',
-                       'b bin 4,5',
-                       'h hen 2,4',
-                       'ng sing 2,3,4,5',
-                       'sh shin 1,3,4',
-                       'g gift 3,4,5',
-                       'y yes 1,2,3,4,5',
-                       'ch chin 2,5',
-                       'j jam 1,4,5',
-                       'th thin 1,2,4',
-                       'zh azure 1,3,4,5']
-        vowels = ['@ about 0',
-                  'is Dennis 0,4',
-                  'o bob 0,2',
-                  'i bit 0,1',
-                  'a bat 0,3',
-                  'e bet 0,2,3,4', 
-                  'ea beat 0,2,3',
-                  'a bake 0,5',
-                  'uh but 0,3,4',
-                  'u lute 0,2,3,4,5',
-                  'i bite 0,4,5',
-                  'oa boat 0,2,4',
-                  'oo book 0,3,4,5',
-                  'i bird 0,2,5',
-                  'ou bout 0,2,3,5',
-                  'yu cute 0,3,5',
-                  'oy boy 0,2,4,5']
-        for k, phonemeset in enumerate([consonants, vowels]):
-            for i, s in enumerate(phonemeset):
-                text = font.render(s, 1, gray)
-                textpos = text.get_rect(left=10+k*200,
-                                        bottom=30+i*20)
-                background.blit(text, textpos)
+#        for k, phonemeset in enumerate([consonants, vowels]):
+#            for i, s in enumerate(phonemeset):
+#                text = font.render(s, 1, gray)
+#                textpos = text.get_rect(left=10+k*200,
+#                                        bottom=30+i*20)
+        image, imagerect = load_image("mcs_phonemes.png")
+        background.blit(image, imagerect)
 #         text = font.render('b', gray)
 #         text = font.render('i', gray)
 #         text = font.render('t', gray)
         
-    else:
-        print "no font for you"
 
 statusmsg = None
 
@@ -107,8 +78,8 @@ def update_status_msg(msg):
         font = pygame.font.Font(None, 26)
 
         text = font.render(msg, 1, gray)
-        textpos = text.get_rect(left=400,
-                            bottom=100)
+        textpos = text.get_rect(left=450,
+                            bottom=300)
         overlap = pygame.Rect(textpos)
         overlap.w *= 2
         overlap.h *= 2
@@ -268,6 +239,25 @@ _learn_keymap = itertools.cycle([('Right hand 5', 5),
                                  ('Left hand 0', 6),
                          ]).next
 
+
+def load_keymap():
+    try:
+        fh = open('keymap.json', 'r')
+        newone = json.load(fh)
+        keyboardkeymap.clear()
+        for i in newone:
+            keyboardkeymap[int(i)] = newone[i]
+    except Exception, e:
+        print e
+
+
+def dump_keymap():
+    try:
+        fh = open('keymap.json', 'w')
+        json.dump(keyboardkeymap, fh)
+    except Exception, e:
+        print e
+
 def updatekeymap(new, old):
     global keyboardkeymap
     keyboardkeymap.clear()
@@ -282,6 +272,7 @@ lkeyer = Keyer(f.decoder, 1500)
 rkeyer = Keyer(f.decoder, 1500)
 learning = False
 listeners = []
+load_keymap()
 try:
     screen = pygame.display.set_mode((800, 600))
     pygame.display.set_caption('simplesteno')
@@ -325,6 +316,7 @@ try:
                         learning = False
                         updatekeymap(newkeymap, keyboardkeymap)
                         update_status_msg('')
+                        dump_keymap()
                         continue
                     update_status_msg(_learn_keymap()[0])
                 if key == 284:
