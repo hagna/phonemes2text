@@ -1,12 +1,21 @@
 import pygame
-import pygame.font, pygame.time, pygame.fastevent, pygame.midi
-from pygame.midi import MIDIIN
+import pygame.font, pygame.time, pygame.fastevent, pygame.draw
+
+MIDI=True
+try:
+    pygame.midi
+    from pygame.midi import MIDIIN
+
+except Exception, e:
+    print e
+    MIDI=False
+    MIDIIN=None
+
 import os, sys
 from steno import Keyer
 
 from pygame.locals import *
 
-MIDI=False
 os.environ['SDL_VIDEO_CENTERED'] = '1'
 pygame.init()
 pygame.fastevent.init()
@@ -36,7 +45,8 @@ white = (255,255,255)
 def helper_text():
     if pygame.font:
         font = pygame.font.Font(None, 26)
-        consonants = ['net 4', 'tin 3',
+        consonants = ['net 4', 
+                      'tin 3',
                        'r run 1',
                        's sin 2',
                        'd din 5',
@@ -82,15 +92,38 @@ def helper_text():
                 textpos = text.get_rect(left=10+k*200,
                                         bottom=30+i*20)
                 background.blit(text, textpos)
+#         text = font.render('b', gray)
+#         text = font.render('i', gray)
+#         text = font.render('t', gray)
+        
     else:
         print "no font for you"
+
+statusmsg = None
+
+def update_status_msg(msg):
+    msg = "%-15s" % msg
+    if pygame.font:
+        font = pygame.font.Font(None, 26)
+
+        text = font.render(msg, 1, gray)
+        textpos = text.get_rect(left=400,
+                            bottom=100)
+        overlap = pygame.Rect(textpos)
+        overlap.w *= 2
+        overlap.h *= 2
+        pygame.draw.rect(background, blue, overlap)
+        background.blit(text, textpos)
+        statusmsg = text
+    else:
+        print msg
 
 try:
     from espeak import espeak 
     synth = espeak.synth
     espeak.set_parameter(espeak.Parameter.Rate, 100)
     espeak.set_parameter(espeak.Parameter.Volume, 100)
-    espeak.set_voice('mb-us1')
+    #espeak.set_voice('mb-us1')
     espeak.synth("hello")
     #print espeak.get_parameter("rate")
 except Exception, e:
@@ -221,11 +254,34 @@ def lookup(k, validkeys=keyboardkeymap):
 def lookup_piano(k):
     return lookup(k, pianokeymap)
 
+_learn_keymap = itertools.cycle([('Right hand 5', 5),
+                                 ('Right hand 4', 4),
+                                 ('Right hand 3', 3),
+                                 ('Right hand 2', 2),
+                                 ('Right hand 1', 1),
+                                 ('Right hand 0', 0),
+                                 ('Left hand 5', 11),
+                                 ('Left hand 4', 10),
+                                 ('Left hand 3', 9),
+                                 ('Left hand 2', 8),
+                                 ('Left hand 1', 7),
+                                 ('Left hand 0', 6),
+                         ]).next
+
+def updatekeymap(new, old):
+    global keyboardkeymap
+    keyboardkeymap.clear()
+    res = {}
+    j = range(RHAND[-1], RHAND[0]-1, -1) + range(LHAND[-1], LHAND[0]-1, -1)
+    newmap = zip(new, j)
+    for i,j in newmap:
+        keyboardkeymap[i] = j
 
 f = FlushingDecoder(500)
 lkeyer = Keyer(f.decoder, 1500)
 rkeyer = Keyer(f.decoder, 1500)
-
+learning = False
+listeners = []
 try:
     screen = pygame.display.set_mode((800, 600))
     pygame.display.set_caption('simplesteno')
@@ -238,12 +294,15 @@ try:
     pygame.display.flip()
     clock = pygame.time.Clock()
     while True:
+        screen.blit(background, (0, 0))
+        pygame.display.flip()
+
         clock.tick(60)
         t = pygame.time.get_ticks()
         f.update(t)
         event = event_poll()
         if MIDI:
-            if piano.poll():
+           if piano.poll():
                 midi_events = piano.read(10)
                 # convert them into pygame events.
                 midi_evs = pygame.midi.midis2events(midi_events, piano.device_id)
@@ -260,6 +319,21 @@ try:
             if event.type == KEYDOWN:
                 if key == pygame.K_ESCAPE:
                     break
+                if learning:
+                    newkeymap.append(key)
+                    if len(newkeymap) == 12:
+                        learning = False
+                        updatekeymap(newkeymap, keyboardkeymap)
+                        update_status_msg('')
+                        continue
+                    update_status_msg(_learn_keymap()[0])
+                if key == 284:
+                    newkeymap = []
+                    learning = True
+                    update_status_msg(_learn_keymap()[0])
+                    continue
+                for m in listeners:
+                    m(event)
                 if z in RHAND:
                     rkeyer.keydown(z, t)
                 if z in LHAND:
