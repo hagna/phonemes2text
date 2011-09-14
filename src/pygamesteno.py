@@ -1,6 +1,10 @@
 import pygame
 import pygame.font, pygame.time, pygame.fastevent, pygame.draw
-import json
+try:
+    import json
+except Exception, e:
+    import simplejson as json
+
 
 MIDI=True
 try:
