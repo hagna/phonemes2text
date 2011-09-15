@@ -1,6 +1,7 @@
-from twisted.internet import reactor
+from twisted.internet import reactor, defer
 from twisted.internet.task import LoopingCall
 from twisted.python import log
+from twisted.python.usage import Options, UsageError
 
 import pygame
 import pygame.font, pygame.time, pygame.fastevent, pygame.draw
@@ -31,6 +32,34 @@ blue = (0,6,178)
 gray = (170,170,170)
 red = (167,2,0)
 white = (255,255,255)
+
+def react(reactor, main, argv, **kw):
+    """
+    Call C{main} and run the reactor until the L{Deferred} it returns fires.
+
+    @param reactor: An unstarted L{IReactorCore} provider which will be run and
+        later stopped.
+
+    @param main: A callable which returns a L{Deferred}.  It should take as
+        many arguments as there are elements in the list C{argv}.
+
+    @param argv: A list of arguments to pass to C{main}.
+
+    @return: C{None}
+    """
+    stopping = []
+    reactor.addSystemEventTrigger('before', 'shutdown', stopping.append, True)
+    finished = main(reactor, argv, **kw)
+    finished.addErrback(log.err, "main function encountered error")
+    exit = []
+    def cbFinish(ignored):
+        exit.append(ignored)
+        if not stopping:
+            reactor.callWhenRunning(reactor.stop)
+    finished.addCallback(cbFinish)
+    reactor.run()
+    raise SystemExit(exit[0])
+
 
 def update_status_msg(background, msg):
     msg = "%-15s" % msg
@@ -237,6 +266,8 @@ class Keymap:
                                  None,
                          ]).next
 
+    def __init__(self):
+        self.load_keymap()
 
     def load_keymap(self):
         try:
@@ -259,7 +290,11 @@ class Keymap:
 
     def updateKeymap(self):
         self.keyboardkeymap.clear()
-        for i, key in enumerate(self.RHAND + self.LHAND):
+        rhand = self.RHAND[:]
+        lhand = self.LHAND[:]
+        rhand.reverse()
+        lhand.reverse()
+        for i, key in enumerate(rhand + lhand):
             self.keyboardkeymap[self.newmap[i]] = key
         self.newmap = []
 
@@ -289,6 +324,7 @@ class Keymap:
             self.window.submitTo(self.parentController)
             update_status_msg(self.window.screen, '')
             self.updateKeymap()
+            self.dump_keymap()
         else:
             msg, val = v
             update_status_msg(self.window.screen, msg)
@@ -543,12 +579,43 @@ class FlushingDecoder:
 #     pygame.quit()  # Keep this IDLE friendly 
 
 
-if __name__ == '__main__':
+class RunOptions(Options):
+    def getSynopsis(self):
+        return """port fqdn"""
 
-    w = Window(reactor)
-    w.submitTo(Controller())
-    d = w.go()
-    d.addCallback(log.msg)
-    d.addErrback(log.err)
-    d.addCallback(lambda a: reactor.stop())
-    reactor.run()
+#     def parseArgs(self, ip, fqdn):
+#         self.ip = ip
+#         self.fqdn = fqdn
+
+
+class StartOptions(Options):
+    def getSynopsis(self):
+        return """Usage: %s scan|fetch|put""" % __file__
+
+    subCommands = [
+        ('net', None, RunOptions, 'Send phonemes over the network.'),
+        ]
+
+def parseCmdLine(argv):
+    opt = StartOptions()
+    try:
+        opt.parseOptions(argv[1:])
+    except UsageError, e:
+         raise SystemExit(str(e))
+    return opt
+
+
+def main(reactor, argv):
+    opt = parseCmdLine(argv)
+    command = opt.subCommand
+    if command == 'net':
+        print "Not implemented yet."
+        return defer.succeed(None)
+    else:
+        w = Window(reactor)
+        w.submitTo(Controller())
+        d = w.go()
+        return d
+
+if __name__ == '__main__':
+    react(reactor, main, sys.argv)
