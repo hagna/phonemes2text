@@ -20,7 +20,7 @@ except Exception, e:
     MIDI=False
     MIDIIN=None
 
-import os, sys
+import os, sys, itertools
 from steno import Keyer
 
 from pygame.locals import *
@@ -31,6 +31,23 @@ blue = (0,6,178)
 gray = (170,170,170)
 red = (167,2,0)
 white = (255,255,255)
+
+def update_status_msg(background, msg):
+    msg = "%-15s" % msg
+    if pygame.font:
+        font = pygame.font.Font(None, 26)
+
+        text = font.render(msg, 1, gray)
+        textpos = text.get_rect(left=450,
+                            bottom=300)
+        overlap = pygame.Rect(textpos)
+        overlap.w *= 2
+        overlap.h *= 2
+        pygame.draw.rect(background, blue, overlap)
+        background.blit(text, textpos)
+    else:
+        print msg
+
 
 def load_image(name, colorkey=None):
     fullname = os.path.join('data', name)
@@ -135,6 +152,7 @@ class Window(object):
         events.
         """
         self.controller = controller
+        self.controller.window = self
 
 
     def go(self):
@@ -171,7 +189,7 @@ class Window(object):
         self._inputCall.stop()
 
 
-class Controller:
+class Keymap:
     RHAND = [0,1,2,3,4,5]
     LHAND = [6,7,8,9,10,11]
 
@@ -204,19 +222,89 @@ class Controller:
                     52:5,
                     }
 
+    _learn_keymap = itertools.cycle([('Right hand 5', 5),
+                                 ('Right hand 4', 4),
+                                 ('Right hand 3', 3),
+                                 ('Right hand 2', 2),
+                                 ('Right hand 1', 1),
+                                 ('Right hand 0', 0),
+                                 ('Left hand 5', 11),
+                                 ('Left hand 4', 10),
+                                 ('Left hand 3', 9),
+                                 ('Left hand 2', 8),
+                                 ('Left hand 1', 7),
+                                 ('Left hand 0', 6),
+                                 None,
+                         ]).next
+
+
+    def load_keymap(self):
+        try:
+            fh = open('keymap.json', 'r')
+            newone = json.load(fh)
+            self.keyboardkeymap.clear()
+            for i in newone:
+                self.keyboardkeymap[int(i)] = newone[i]
+        except Exception, e:
+            print e
+
+
+    def dump_keymap(self):
+        try:
+            fh = open('keymap.json', 'w')
+            json.dump(self.keyboardkeymap, fh)
+        except Exception, e:
+            print e
+
+
+    def updateKeymap(self):
+        self.keyboardkeymap.clear()
+        for i, key in enumerate(self.RHAND + self.LHAND):
+            self.keyboardkeymap[self.newmap[i]] = key
+        self.newmap = []
+
+
     def lookup(self, k, validkeys=None):
         if validkeys is None:
             validkeys = self.keyboardkeymap
         res = validkeys.get(k, None)
-        return res
+        hand = 0
+        if res in self.LHAND:
+            hand = 1
+            res = res - self.LHAND[0]
+        return res, hand
 
 
     def lookup_piano(self, k):
         return self.lookup(k, Controller.pianokeymap)
 
 
+    newmap = []
+
+    def keyDown(self, k):
+        v = self._learn_keymap()
+        self.newmap.append(k)
+
+        if v == None:
+            self.window.submitTo(self.parentController)
+            update_status_msg(self.window.screen, '')
+            self.updateKeymap()
+        else:
+            msg, val = v
+            update_status_msg(self.window.screen, msg)
+
+
+    def keyUp(self, k):
+        pass
+
+
+
+class Controller:
+
     def __init__(self):
         f = FlushingDecoder(0.500)
+        self.keymap = Keymap()
+        self.lookup = self.keymap.lookup
         def updateF():
             f.update(reactor.seconds())
         s = LoopingCall(updateF)
@@ -224,20 +312,29 @@ class Controller:
         self.lkeyer = Keyer(f.decoder, 1500)
         self.rkeyer = Keyer(f.decoder, 1500)
 
+
     def keyDown(self, k):
+        if k == pygame.K_F3:
+            self.window.submitTo(self.keymap)
+            self.keymap.parentController = self
+            update_status_msg(self.window.screen, self.keymap._learn_keymap()[0])
         t = reactor.seconds()
-        z = self.lookup(k)
-        if z in self.RHAND:
+        z, hand = self.lookup(k)
+        if z is None:
+            return
+        if hand == 0:
             self.rkeyer.keyDown(z, t)
-        if z in self.LHAND:
+        else:
             self.lkeyer.keyDown(z, t)
+
 
     def keyUp(self, k):
         t = reactor.seconds()
-        z = self.lookup(k)
-        if z in self.RHAND:
+        z, hand = self.lookup(k)
+        if z is None: return
+        if hand == 0:
             self.rkeyer.keyUp(z, t)
-        if z in self.LHAND:
+        else:
             self.lkeyer.keyUp(z, t)
 
 
@@ -259,22 +356,6 @@ if MIDI:
 
 statusmsg = None
 
-def update_status_msg(msg):
-    msg = "%-15s" % msg
-    if pygame.font:
-        font = pygame.font.Font(None, 26)
-
-        text = font.render(msg, 1, gray)
-        textpos = text.get_rect(left=450,
-                            bottom=300)
-        overlap = pygame.Rect(textpos)
-        overlap.w *= 2
-        overlap.h *= 2
-        pygame.draw.rect(background, blue, overlap)
-        background.blit(text, textpos)
-        statusmsg = text
-    else:
-        print msg
 
 try:
     from espeak import espeak 
@@ -373,47 +454,7 @@ class FlushingDecoder:
 
 
 
-_learn_keymap = itertools.cycle([('Right hand 5', 5),
-                                 ('Right hand 4', 4),
-                                 ('Right hand 3', 3),
-                                 ('Right hand 2', 2),
-                                 ('Right hand 1', 1),
-                                 ('Right hand 0', 0),
-                                 ('Left hand 5', 11),
-                                 ('Left hand 4', 10),
-                                 ('Left hand 3', 9),
-                                 ('Left hand 2', 8),
-                                 ('Left hand 1', 7),
-                                 ('Left hand 0', 6),
-                         ]).next
 
-
-def load_keymap():
-    try:
-        fh = open('keymap.json', 'r')
-        newone = json.load(fh)
-        keyboardkeymap.clear()
-        for i in newone:
-            keyboardkeymap[int(i)] = newone[i]
-    except Exception, e:
-        print e
-
-
-def dump_keymap():
-    try:
-        fh = open('keymap.json', 'w')
-        json.dump(keyboardkeymap, fh)
-    except Exception, e:
-        print e
-
-def updatekeymap(new, old):
-    global keyboardkeymap
-    keyboardkeymap.clear()
-    res = {}
-    j = range(RHAND[-1], RHAND[0]-1, -1) + range(LHAND[-1], LHAND[0]-1, -1)
-    newmap = zip(new, j)
-    for i,j in newmap:
-        keyboardkeymap[i] = j
 
 
 # f = FlushingDecoder(500)
