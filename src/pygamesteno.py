@@ -1,4 +1,6 @@
 from twisted.internet import reactor
+from twisted.internet.task import LoopingCall
+from twisted.python import log
 
 import pygame
 import pygame.font, pygame.time, pygame.fastevent, pygame.draw
@@ -22,139 +24,6 @@ import os, sys
 from steno import Keyer
 
 from pygame.locals import *
-
-os.environ['SDL_VIDEO_CENTERED'] = '1'
-pygame.init()
-pygame.fastevent.init()
-event_poll = pygame.fastevent.poll
-event_post = pygame.fastevent.post
-
-
-class Window(object):
-    """
-    Adapted from game https://code.launchpad.net/~game-hackers/game/trunk
-
-    A top-level PyGame-based window. This acts as a container for
-    other view objects.
-
-    @ivar clock: Something providing
-        L{twisted.internet.interfaces.IReactorTime}.
-    @ivar screen: The L{pygame.Surface} which will be drawn to.
-    @ivar controller: The current controller.
-
-    @ivar display: Something like L{pygame.display}.
-    @ivar event: Something like L{pygame.event}.
-
-    """
-    screen = None
-
-    def __init__(self,
-                 clock=reactor,
-                 display=pygame.display,
-                 event=pygame.fastevent):
-        self.viewport = Viewport((0, 0), (800, 600))
-        self.clock = clock
-        self.display = display
-        self.controller = None
-        self.event = event
-
-
-    def paint(self):
-        """
-        Call C{paint} on all views which have been directly added to
-        this Window.
-        """
-        self.display.flip()
-
-
-    def handleInput(self):
-        """
-        Retrieve outstanding pygame input events and dispatch them.
-        """
-        event in self.event.poll()
-        if event:
-            self._handleEvent(event)
-
-
-    def _handleEvent(self, event):
-        """
-        Handle a single pygame input event.
-        """
-        if event.type == pygame.locals.QUIT or \
-                event.type == pygame.KEYDOWN and event.key == pygame.K_q:
-            self.stop()
-        elif self.controller is not None:
-            if event.type == pygame.KEYDOWN:
-                self.controller.keyDown(event.key)
-            elif event.type == pygame.KEYUP:
-                self.controller.keyUp(event.key)
-            elif event.type == pygame.MOUSEMOTION:
-                if pygame.event.get_grab():
-                    self.controller.mouseMotion(
-                        event.pos, event.rel, event.buttons)
-            elif event.type == pygame.MOUSEBUTTONUP:
-                pygame.event.set_grab(not pygame.event.get_grab())
-                pygame.mouse.set_visible(not pygame.mouse.set_visible(True))
-
-
-    def submitTo(self, controller):
-        """
-        Specify the given controller as the one to receive further
-        events.
-        """
-        self.controller = controller
-        self._terrainCheck = LoopingCall(self._checkTerrain, controller.player)
-        self._terrainCheck.clock = self.clock
-        # XXX Needs an errback
-        self._terrainCheck.start(self.TERRAIN_CHECK_INTERVAL)
-        # XXX Next line untested
-        self.scene.camera = FollowCamera(controller.player)
-
-
-    def go(self):
-        """
-        Show this window.
-
-        @return: A Deferred that fires when this window is closed by the user.
-        """
-        self.display.init()
-        self.screen = self.display.set_mode(
-            self.viewport.viewSize,
-            pygame.locals.DOUBLEBUF | pygame.locals.OPENGL)
-        self.viewport.initialize()
-
-        self._renderCall = LoopingCall(self.paint)
-        self._renderCall.start(1 / 60, now=False)
-        self._inputCall = LoopingCall(self.handleInput)
-        finishedDeferred = self._inputCall.start(0.04, now=False)
-        finishedDeferred.addCallback(lambda ign: self._renderCall.stop())
-        finishedDeferred.addCallback(lambda ign: self.display.quit())
-
-        return finishedDeferred
-
-
-    def stop(self):
-        """
-        Stop updating this window and handling events for it.
-        """
-        if self._terrainCheck is not None:
-            self._terrainCheck.stop()
-        self._inputCall.stop()
-
-
-
-
-if MIDI:
-    device_id = 5
-    pygame.midi.init()
-    if device_id is None:
-        input_id = pygame.midi.get_default_input_id()
-    else:
-        input_id = device_id
-
-    print ("using input_id :%s:" % input_id)
-    piano = pygame.midi.Input( input_id )
-
 
 
 #wp51 colors
@@ -190,6 +59,203 @@ def helper_text():
 #         text = font.render('i', gray)
 #         text = font.render('t', gray)
         
+
+
+
+class Window(object):
+    """
+    Adapted from game https://code.launchpad.net/~game-hackers/game/trunk
+
+    A top-level PyGame-based window. This acts as a container for
+    other view objects.
+
+    @ivar clock: Something providing
+        L{twisted.internet.interfaces.IReactorTime}.
+    @ivar screen: The L{pygame.Surface} which will be drawn to.
+    @ivar controller: The current controller.
+
+    @ivar display: Something like L{pygame.display}.
+    @ivar event: Something like L{pygame.event}.
+
+    """
+    screen = None
+
+    def __init__(self,
+                 clock=reactor,
+                 display=pygame.display,
+                 event=pygame.fastevent):
+        self.clock = clock
+        self.display = display
+        self.controller = None
+        self.event = event
+
+
+
+    def paint(self):
+        """
+        Call C{paint} on all views which have been directly added to
+        this Window.
+        """
+        self.display.flip()
+
+
+    def handleInput(self):
+        """
+        Retrieve outstanding pygame input events and dispatch them.
+        """
+        event = self.event.poll()
+        if event:
+            self._handleEvent(event)
+
+
+    def _handleEvent(self, event):
+        """
+        Handle a single pygame input event.
+        """
+        if event.type == pygame.locals.QUIT or \
+                event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            self.stop()
+        elif self.controller is not None:
+            if event.type == pygame.KEYDOWN:
+                self.controller.keyDown(event.key)
+            elif event.type == pygame.KEYUP:
+                self.controller.keyUp(event.key)
+#             elif event.type == pygame.MOUSEMOTION:
+#                 if pygame.event.get_grab():
+#                     self.controller.mouseMotion(
+#                         event.pos, event.rel, event.buttons)
+#             elif event.type == pygame.MOUSEBUTTONUP:
+#                 pygame.event.set_grab(not pygame.event.get_grab())
+#                 pygame.mouse.set_visible(not pygame.mouse.set_visible(True))
+
+
+    def submitTo(self, controller):
+        """
+        Specify the given controller as the one to receive further
+        events.
+        """
+        self.controller = controller
+
+
+    def go(self):
+        """
+        Show this window.
+
+        @return: A Deferred that fires when this window is closed by the user.
+        """
+        os.environ['SDL_VIDEO_CENTERED'] = '1'
+        pygame.init()
+        pygame.fastevent.init()
+
+        self.display.init()
+        self.screen = self.display.set_mode(
+            (800,600),
+            pygame.locals.DOUBLEBUF)
+
+        image, imagerect = load_image("mcs_phonemes.bmp")
+        self.screen.blit(image, imagerect)
+        self._renderCall = LoopingCall(self.paint)
+        self._renderCall.start(1 / 60, now=False)
+        self._inputCall = LoopingCall(self.handleInput)
+        finishedDeferred = self._inputCall.start(0.04, now=False)
+        finishedDeferred.addCallback(lambda ign: self._renderCall.stop())
+        finishedDeferred.addCallback(lambda ign: self.display.quit())
+
+        return finishedDeferred
+
+
+    def stop(self):
+        """
+        Stop updating this window and handling events for it.
+        """
+        self._inputCall.stop()
+
+
+class Controller:
+    RHAND = [0,1,2,3,4,5]
+    LHAND = [6,7,8,9,10,11]
+
+
+    keyboardkeymap = {pygame.K_a:LHAND[5],
+                     pygame.K_w:LHAND[4],
+                     pygame.K_e:LHAND[3],
+                     pygame.K_r:LHAND[2],
+                     pygame.K_g:LHAND[1],
+                     pygame.K_v:LHAND[0],
+                     pygame.K_n:RHAND[0],
+                     pygame.K_h:RHAND[1],
+                     pygame.K_u:RHAND[2],
+                     pygame.K_i:RHAND[3],
+                     pygame.K_o:RHAND[4],
+                     pygame.K_SEMICOLON:RHAND[5]}
+
+
+    pianokeymap =  {
+                    72:5,
+                    70:4,
+                    68:3,
+                    66:2,
+                    64:1,
+                    62:0,
+                    60:1,
+                    58:2,
+                    56:3,
+                    54:4,
+                    52:5,
+                    }
+
+    def lookup(self, k, validkeys=None):
+        if validkeys is None:
+            validkeys = self.keyboardkeymap
+        res = validkeys.get(k, None)
+        return res
+
+
+    def lookup_piano(self, k):
+        return self.lookup(k, Controller.pianokeymap)
+
+
+    def __init__(self):
+        f = FlushingDecoder(500)
+        def updateF():
+            f.update(reactor.seconds())
+        s = LoopingCall(updateF)
+        s.start(0.04, now=False)
+        self.lkeyer = Keyer(f.decoder, 1500)
+        self.rkeyer = Keyer(f.decoder, 1500)
+
+    def keyDown(self, k):
+        t = reactor.seconds()
+        z = self.lookup(k)
+        if z in self.RHAND:
+            self.rkeyer.keyDown(z, t)
+        if z in self.LHAND:
+            self.lkeyer.keyDown(z, t)
+
+    def keyUp(self, k):
+        t = reactor.seconds()
+        z = self.lookup(k)
+        if z in self.RHAND:
+            self.rkeyer.keyUp(z, t)
+        if z in self.LHAND:
+            self.lkeyer.keyUp(z, t)
+
+
+
+
+if MIDI:
+    device_id = 5
+    pygame.midi.init()
+    if device_id is None:
+        input_id = pygame.midi.get_default_input_id()
+    else:
+        input_id = device_id
+
+    print ("using input_id :%s:" % input_id)
+    piano = pygame.midi.Input( input_id )
+
+
+
 
 statusmsg = None
 
@@ -306,45 +372,6 @@ class FlushingDecoder:
             print self.buffer
 
 
-RHAND = [0,1,2,3,4,5]
-LHAND = [6,7,8,9,10,11]
-
-
-keyboardkeymap = {pygame.K_a:LHAND[5],
-                 pygame.K_w:LHAND[4],
-                 pygame.K_e:LHAND[3],
-                 pygame.K_r:LHAND[2],
-                 pygame.K_g:LHAND[1],
-                 pygame.K_v:LHAND[0],
-                 pygame.K_n:RHAND[0],
-                 pygame.K_h:RHAND[1],
-                 pygame.K_u:RHAND[2],
-                 pygame.K_i:RHAND[3],
-                 pygame.K_o:RHAND[4],
-                 pygame.K_SEMICOLON:RHAND[5]}
-
-
-pianokeymap =  {
-                72:5,
-                70:4,
-                68:3,
-                66:2,
-                64:1,
-                62:0,
-                60:1,
-                58:2,
-                56:3,
-                54:4,
-                52:5,
-                }
-
-def lookup(k, validkeys=keyboardkeymap):
-    res = validkeys.get(k, None)
-    return res
-
-
-def lookup_piano(k):
-    return lookup(k, pianokeymap)
 
 _learn_keymap = itertools.cycle([('Right hand 5', 5),
                                  ('Right hand 4', 4),
@@ -388,90 +415,99 @@ def updatekeymap(new, old):
     for i,j in newmap:
         keyboardkeymap[i] = j
 
-f = FlushingDecoder(500)
-lkeyer = Keyer(f.decoder, 1500)
-rkeyer = Keyer(f.decoder, 1500)
-learning = False
-listeners = []
-load_keymap()
-try:
-    screen = pygame.display.set_mode((800, 600))
-    pygame.display.set_caption('simplesteno')
-    pygame.mouse.set_visible(0)
-    background = pygame.Surface(screen.get_size())
-    background = background.convert()
-    background.fill(blue)
-    helper_text()
-    screen.blit(background, (0, 0))
-    pygame.display.flip()
-    clock = pygame.time.Clock()
-    while True:
-        screen.blit(background, (0, 0))
-        pygame.display.flip()
 
-        clock.tick(60)
-        t = pygame.time.get_ticks()
-        f.update(t)
-        event = event_poll()
-        if MIDI:
-           if piano.poll():
-                midi_events = piano.read(10)
-                # convert them into pygame events.
-                midi_evs = pygame.midi.midis2events(midi_events, piano.device_id)
+# f = FlushingDecoder(500)
+# lkeyer = Keyer(f.decoder, 1500)
+# rkeyer = Keyer(f.decoder, 1500)
+# learning = False
+# listeners = []
+# load_keymap()
+# try:
+#     screen = pygame.display.set_mode((800, 600))
+#     pygame.display.set_caption('simplesteno')
+#     pygame.mouse.set_visible(0)
+#     background = pygame.Surface(screen.get_size())
+#     background = background.convert()
+#     background.fill(blue)
+#     helper_text()
+#     screen.blit(background, (0, 0))
+#     pygame.display.flip()
+#     clock = pygame.time.Clock()
+#     while True:
+#         screen.blit(background, (0, 0))
+#         pygame.display.flip()
 
-                for m_e in midi_evs:
-                    event_post( m_e )
+#         clock.tick(60)
+#         t = pygame.time.get_ticks()
+#         f.update(t)
+#         event = event_poll()
+#         if MIDI:
+#            if piano.poll():
+#                 midi_events = piano.read(10)
+#                 # convert them into pygame events.
+#                 midi_evs = pygame.midi.midis2events(midi_events, piano.device_id)
+
+#                 for m_e in midi_evs:
+#                     event_post( m_e )
 
 
-        if event.type == pygame.QUIT:
-            break
-        if event.type in (KEYDOWN, KEYUP):
-            key = event.key
-            z = lookup(key)
-            if event.type == KEYDOWN:
-                if key == pygame.K_ESCAPE:
-                    break
-                if learning:
-                    newkeymap.append(key)
-                    if len(newkeymap) == 12:
-                        learning = False
-                        updatekeymap(newkeymap, keyboardkeymap)
-                        update_status_msg('')
-                        dump_keymap()
-                        continue
-                    update_status_msg(_learn_keymap()[0])
-                if key == 284:
-                    newkeymap = []
-                    learning = True
-                    update_status_msg(_learn_keymap()[0])
-                    continue
-                for m in listeners:
-                    m(event)
-                if z in RHAND:
-                    rkeyer.keydown(z, t)
-                if z in LHAND:
-                    lkeyer.keydown(z-LHAND[0], t)
-            if event.type == KEYUP:
-                if z in RHAND:
-                    rkeyer.keyup(z, t)
-                if z in LHAND:
-                    lkeyer.keyup(z-LHAND[0], t)
-        if event.type == MIDIIN:
-            note, vel = event.data1, event.data2
-            z = lookup_piano(note)
-            if vel > 0: # keydown
+#         if event.type == pygame.QUIT:
+#             break
+#         if event.type in (KEYDOWN, KEYUP):
+#             key = event.key
+#             z = lookup(key)
+#             if event.type == KEYDOWN:
+#                 if key == pygame.K_ESCAPE:
+#                     break
+#                 if learning:
+#                     newkeymap.append(key)
+#                     if len(newkeymap) == 12:
+#                         learning = False
+#                         updatekeymap(newkeymap, keyboardkeymap)
+#                         update_status_msg('')
+#                         dump_keymap()
+#                         continue
+#                     update_status_msg(_learn_keymap()[0])
+#                 if key == 284:
+#                     newkeymap = []
+#                     learning = True
+#                     update_status_msg(_learn_keymap()[0])
+#                     continue
+#                 for m in listeners:
+#                     m(event)
+#                 if z in RHAND:
+#                     rkeyer.keyDown(z, t)
+#                 if z in LHAND:
+#                     lkeyer.keyDown(z-LHAND[0], t)
+#             if event.type == KEYUP:
+#                 if z in RHAND:
+#                     rkeyer.keyUp(z, t)
+#                 if z in LHAND:
+#                     lkeyer.keyUp(z-LHAND[0], t)
+#         if event.type == MIDIIN:
+#             note, vel = event.data1, event.data2
+#             z = lookup_piano(note)
+#             if vel > 0: # keyDown
 
-                if z is not None:
-                    keyer.keydown(z, t)
-            if vel == 0: # keyup
-                if z is not None:
-                    keyer.keyup(z, t)
-finally:
-    if MIDI:
-        if piano:
-            del piano
-        pygame.midi.quit()
-    pygame.quit()  # Keep this IDLE friendly 
+#                 if z is not None:
+#                     keyer.keyDown(z, t)
+#             if vel == 0: # keyUp
+#                 if z is not None:
+#                     keyer.keyUp(z, t)
+# finally:
+#     if MIDI:
+#         if piano:
+#             del piano
+#         pygame.midi.quit()
+#     pygame.quit()  # Keep this IDLE friendly 
+
 
 if __name__ == '__main__':
+
+    w = Window(reactor)
+    w.submitTo(Controller())
+    d = w.go()
+    d.addCallback(log.msg)
+    d.addErrback(log.err)
+    d.addCallback(lambda a: reactor.stop())
     reactor.run()

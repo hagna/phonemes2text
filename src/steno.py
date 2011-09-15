@@ -2,7 +2,7 @@ import time
 
 class Keyer(object):
     """
-    Use keydown and keyup as callbacks for triggering the decoder
+    Use keyDown and keyUp as callbacks for triggering the decoder
     with the relevant chord of keys.
 
 
@@ -20,26 +20,26 @@ class Keyer(object):
             self.decoder = decoder
         self.maxtime = 0
         self.buffer = []
-        self.keydownbuffer = []
+        self.keyDownbuffer = []
         if threshold is not None:
             self.threshold = threshold
 
 
-    def keyup(self, event, timestamp):
+    def keyUp(self, event, timestamp):
         if timestamp - self.maxtime > self.threshold:
             self.buffer = []
         self.maxtime = timestamp
         self.buffer.append(event)
-        if event in self.keydownbuffer:
-            self.keydownbuffer.remove(event)
+        if event in self.keyDownbuffer:
+            self.keyDownbuffer.remove(event)
         if self.all_keys_up():
             self.decoder(tuple(self.buffer))
             self.buffer = []
 
 
-    def keydown(self, event, timestamp):
-        self.keydownbuffer.append(event)
+    def keyDown(self, event, timestamp):
+        self.keyDownbuffer.append(event)
 
 
     def all_keys_up(self):
-        return self.keydownbuffer == []
+        return self.keyDownbuffer == []

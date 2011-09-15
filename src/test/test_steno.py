@@ -8,55 +8,55 @@ class TestKeyer(unittest.TestCase):
         self.k.all_keys_up = lambda: False
 
 
-    def test_keyup_basic(self):
+    def test_keyUp_basic(self):
         """
-        Keyer.keyup adds the key to the buffer and sets max to the
+        Keyer.keyUp adds the key to the buffer and sets max to the
         key's timestamp.
         """
-        self.k.keyup('A', 1000)
+        self.k.keyUp('A', 1000)
         self.assertEquals(self.k.maxtime, 1000)
         self.assertEquals(self.k.buffer, ['A'])
 
 
-    def test_keyup_again(self):
+    def test_keyUp_again(self):
         """
-        Keyer.keyup appends the key to the buffer and alters maxtime
+        Keyer.keyUp appends the key to the buffer and alters maxtime
         if timestamp is greater than the old maxtime.
         """
-        self.k.keyup('A', 1000)
-        self.k.keyup('B', 1001)
-        self.k.keyup('C', 1002)
+        self.k.keyUp('A', 1000)
+        self.k.keyUp('B', 1001)
+        self.k.keyUp('C', 1002)
         self.assertEquals(self.k.maxtime, 1002)
         self.assertEquals(self.k.buffer, ['A', 'B', 'C'])
 
 
-    def test_keydown_basic(self):
+    def test_keyDown_basic(self):
         """
-        Keyer.keydown appends to a keydownbuffer.
+        Keyer.keyDown appends to a keyDownbuffer.
         """
-        self.k.keydown('A', 1001)
-        self.k.keydown('B', 1002)
-        self.assertEquals(self.k.keydownbuffer, ['A', 'B'])
+        self.k.keyDown('A', 1001)
+        self.k.keyDown('B', 1002)
+        self.assertEquals(self.k.keyDownbuffer, ['A', 'B'])
 
 
     def test_all_keys_up(self):
         """
-        Keyer.all_keys_up is True if keydownbuffer is empty.
+        Keyer.all_keys_up is True if keyDownbuffer is empty.
         """
         self.k = Keyer(None)
-        self.k.keydownbuffer = [1,2,3]
+        self.k.keyDownbuffer = [1,2,3]
         self.assertEquals(self.k.all_keys_up(), False)
-        self.k.keydownbuffer = []
+        self.k.keyDownbuffer = []
         self.assertEquals(self.k.all_keys_up(), True)
 
 
-    def test_keyup_removes_keydown(self):
+    def test_keyUp_removes_keyDown(self):
         """
-        Keyer.keyup removes the corresponding key from keydownbuffer.
+        Keyer.keyUp removes the corresponding key from keyDownbuffer.
         """
-        self.k.keydownbuffer = [1,2]
-        self.k.keyup(1, 1000)
-        self.assertEquals(self.k.keydownbuffer, [2])
+        self.k.keyDownbuffer = [1,2]
+        self.k.keyUp(1, 1000)
+        self.assertEquals(self.k.keyDownbuffer, [2])
 
 
     def test_threshold_init(self):
@@ -71,12 +71,12 @@ class TestKeyer(unittest.TestCase):
 
     def test_gt_threshold_removes_buffer(self):
         """
-        Keyer.keyup removes everything in the buffer if timestamp is
+        Keyer.keyUp removes everything in the buffer if timestamp is
         greater maxtime by the threshold amount. 
         """
         self.k.threshold = 1
-        self.k.keyup('A', 1000)
-        self.k.keyup('CC', 1002)
+        self.k.keyUp('A', 1000)
+        self.k.keyUp('CC', 1002)
         self.assertEquals(self.k.buffer, ['CC'])
 
 
@@ -85,23 +85,23 @@ class TestKeyer(unittest.TestCase):
         otherwise leaves it alone.
         """
         self.k.threshold = 99
-        self.k.keyup('A', 1000)
-        self.k.keyup('CC', 1099)
+        self.k.keyUp('A', 1000)
+        self.k.keyUp('CC', 1099)
         self.assertEquals(self.k.buffer, ['A', 'CC'])
 
 
-    def test_keyup_calls_decoder(self):
+    def test_keyUp_calls_decoder(self):
         """
-        Keyer.keyup calls decoder when all the keys are up and it
+        Keyer.keyUp calls decoder when all the keys are up and it
         clears the buffer.
         """
         calls = []
         def fake(t):
             calls.append(t)
         self.k = Keyer(fake)
-        self.k.keydown('A', 12000)
-        self.k.keydown('B', 1010101)
-        self.k.keyup('A', 10101)
-        self.k.keyup('B', 10102)
+        self.k.keyDown('A', 12000)
+        self.k.keyDown('B', 1010101)
+        self.k.keyUp('A', 10101)
+        self.k.keyUp('B', 10102)
         self.assertEquals(calls, [('A','B')])
         self.assertEquals(self.k.buffer, [])
