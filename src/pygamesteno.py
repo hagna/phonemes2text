@@ -1,3 +1,5 @@
+from twisted.internet import reactor
+
 import pygame
 import pygame.font, pygame.time, pygame.fastevent, pygame.draw
 try:
@@ -26,6 +28,121 @@ pygame.init()
 pygame.fastevent.init()
 event_poll = pygame.fastevent.poll
 event_post = pygame.fastevent.post
+
+
+class Window(object):
+    """
+    Adapted from game https://code.launchpad.net/~game-hackers/game/trunk
+
+    A top-level PyGame-based window. This acts as a container for
+    other view objects.
+
+    @ivar clock: Something providing
+        L{twisted.internet.interfaces.IReactorTime}.
+    @ivar screen: The L{pygame.Surface} which will be drawn to.
+    @ivar controller: The current controller.
+
+    @ivar display: Something like L{pygame.display}.
+    @ivar event: Something like L{pygame.event}.
+
+    """
+    screen = None
+
+    def __init__(self,
+                 clock=reactor,
+                 display=pygame.display,
+                 event=pygame.fastevent):
+        self.viewport = Viewport((0, 0), (800, 600))
+        self.clock = clock
+        self.display = display
+        self.controller = None
+        self.event = event
+
+
+    def paint(self):
+        """
+        Call C{paint} on all views which have been directly added to
+        this Window.
+        """
+        self.display.flip()
+
+
+    def handleInput(self):
+        """
+        Retrieve outstanding pygame input events and dispatch them.
+        """
+        event in self.event.poll()
+        if event:
+            self._handleEvent(event)
+
+
+    def _handleEvent(self, event):
+        """
+        Handle a single pygame input event.
+        """
+        if event.type == pygame.locals.QUIT or \
+                event.type == pygame.KEYDOWN and event.key == pygame.K_q:
+            self.stop()
+        elif self.controller is not None:
+            if event.type == pygame.KEYDOWN:
+                self.controller.keyDown(event.key)
+            elif event.type == pygame.KEYUP:
+                self.controller.keyUp(event.key)
+            elif event.type == pygame.MOUSEMOTION:
+                if pygame.event.get_grab():
+                    self.controller.mouseMotion(
+                        event.pos, event.rel, event.buttons)
+            elif event.type == pygame.MOUSEBUTTONUP:
+                pygame.event.set_grab(not pygame.event.get_grab())
+                pygame.mouse.set_visible(not pygame.mouse.set_visible(True))
+
+
+    def submitTo(self, controller):
+        """
+        Specify the given controller as the one to receive further
+        events.
+        """
+        self.controller = controller
+        self._terrainCheck = LoopingCall(self._checkTerrain, controller.player)
+        self._terrainCheck.clock = self.clock
+        # XXX Needs an errback
+        self._terrainCheck.start(self.TERRAIN_CHECK_INTERVAL)
+        # XXX Next line untested
+        self.scene.camera = FollowCamera(controller.player)
+
+
+    def go(self):
+        """
+        Show this window.
+
+        @return: A Deferred that fires when this window is closed by the user.
+        """
+        self.display.init()
+        self.screen = self.display.set_mode(
+            self.viewport.viewSize,
+            pygame.locals.DOUBLEBUF | pygame.locals.OPENGL)
+        self.viewport.initialize()
+
+        self._renderCall = LoopingCall(self.paint)
+        self._renderCall.start(1 / 60, now=False)
+        self._inputCall = LoopingCall(self.handleInput)
+        finishedDeferred = self._inputCall.start(0.04, now=False)
+        finishedDeferred.addCallback(lambda ign: self._renderCall.stop())
+        finishedDeferred.addCallback(lambda ign: self.display.quit())
+
+        return finishedDeferred
+
+
+    def stop(self):
+        """
+        Stop updating this window and handling events for it.
+        """
+        if self._terrainCheck is not None:
+            self._terrainCheck.stop()
+        self._inputCall.stop()
+
+
+
 
 if MIDI:
     device_id = 5
@@ -355,3 +472,6 @@ finally:
             del piano
         pygame.midi.quit()
     pygame.quit()  # Keep this IDLE friendly 
+
+if __name__ == '__main__':
+    reactor.run()
