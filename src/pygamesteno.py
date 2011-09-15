@@ -2,7 +2,7 @@ import pygame
 import pygame.font, pygame.time, pygame.fastevent, pygame.draw
 try:
     import json
-except Exception, e:
+except:
     import simplejson as json
 
 
