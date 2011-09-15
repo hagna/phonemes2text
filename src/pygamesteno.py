@@ -216,7 +216,7 @@ class Controller:
 
 
     def __init__(self):
-        f = FlushingDecoder(500)
+        f = FlushingDecoder(0.500)
         def updateF():
             f.update(reactor.seconds())
         s = LoopingCall(updateF)
