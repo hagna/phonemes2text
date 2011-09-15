@@ -223,18 +223,10 @@ class Keymap:
     LHAND = [6,7,8,9,10,11]
 
 
-    keyboardkeymap = {pygame.K_a:LHAND[5],
-                     pygame.K_w:LHAND[4],
-                     pygame.K_e:LHAND[3],
-                     pygame.K_r:LHAND[2],
-                     pygame.K_g:LHAND[1],
-                     pygame.K_v:LHAND[0],
-                     pygame.K_n:RHAND[0],
-                     pygame.K_h:RHAND[1],
-                     pygame.K_u:RHAND[2],
-                     pygame.K_i:RHAND[3],
-                     pygame.K_o:RHAND[4],
-                     pygame.K_SEMICOLON:RHAND[5]}
+    keyboardkeymap = {0: 3, 263: 2, 265: 4,
+                      270: 5, 48: 9, 305: 6,
+                      274: 0, 275: 1, 117: 11,
+                      313: 7, 57: 10, 91: 8}
 
 
     pianokeymap =  {
