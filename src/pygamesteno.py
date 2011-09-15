@@ -1,3 +1,8 @@
+
+from twisted.internet.protocol import DatagramProtocol
+from twisted.internet import reactor
+from twisted.application.internet import MulticastServer
+
 from twisted.internet import reactor, defer
 from twisted.internet.task import LoopingCall
 from twisted.python import log
@@ -329,14 +334,17 @@ class Keymap:
 
 class Controller:
 
-    def __init__(self):
-        f = FlushingDecoder(0.500)
+    def __init__(self, decoder=None):
+        if decoder is None:
+            f = FlushingDecoder(0.500)
+            def updateF():
+                f.update(reactor.seconds())
+            s = LoopingCall(updateF)
+            s.start(0.04, now=False)
+        else:
+            f = decoder
         self.keymap = Keymap()
         self.lookup = self.keymap.lookup
-        def updateF():
-            f.update(reactor.seconds())
-        s = LoopingCall(updateF)
-        s.start(0.04, now=False)
         self.lkeyer = Keyer(f.decoder, 1500)
         self.rkeyer = Keyer(f.decoder, 1500)
 
@@ -579,6 +587,13 @@ class RunOptions(Options):
 #         self.ip = ip
 #         self.fqdn = fqdn
 
+class MulticastClientUDP(DatagramProtocol):
+
+    def datagramReceived(self, datagram, address):
+        print "Received:" + repr(datagram)
+        self.address = address
+        print address
+
 
 class StartOptions(Options):
     def getSynopsis(self):
@@ -601,8 +616,22 @@ def main(reactor, argv):
     opt = parseCmdLine(argv)
     command = opt.subCommand
     if command == 'net':
-        print "Not implemented yet."
-        return defer.succeed(None)
+        mcastUDP = MulticastClientUDP()
+        a = reactor.listenUDP(0, mcastUDP)
+        print a
+        print dir(a)
+        class Decoder:
+            def __init__(self, a):
+                self.a = a
+
+            def decoder(self, b):
+                self.a.write(str(b), ('224.0.0.1', 8005))
+
+        w = Window(reactor)
+        w.submitTo(Controller(Decoder(a)))
+        d = w.go()
+        return d
+
     else:
         w = Window(reactor)
         w.submitTo(Controller())
@@ -611,3 +640,4 @@ def main(reactor, argv):
 
 if __name__ == '__main__':
     react(reactor, main, sys.argv)
+
