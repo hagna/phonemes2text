@@ -390,7 +390,7 @@ if MIDI:
 
 
 
-statusmsg = None
+
 
 
 try:
