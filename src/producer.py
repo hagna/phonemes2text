@@ -1,8 +1,7 @@
 from twisted.internet.protocol import DatagramProtocol
-from twisted.internet import reactor
+from twisted.internet import reactor, defer
 from twisted.application.internet import MulticastServer
 
-from twisted.internet import reactor, defer
 from twisted.internet.task import LoopingCall
 from twisted.python import log
 from twisted.python.usage import Options, UsageError
@@ -27,6 +26,8 @@ except Exception, e:
 
 import os, sys, itertools
 from steno import Keyer
+from decoder import FlushingDecoder
+from common import react
 
 from pygame.locals import *
 
@@ -36,33 +37,6 @@ blue = (0,6,178)
 gray = (170,170,170)
 red = (167,2,0)
 white = (255,255,255)
-
-def react(reactor, main, argv, **kw):
-    """
-    Call C{main} and run the reactor until the L{Deferred} it returns fires.
-
-    @param reactor: An unstarted L{IReactorCore} provider which will be run and
-        later stopped.
-
-    @param main: A callable which returns a L{Deferred}.  It should take as
-        many arguments as there are elements in the list C{argv}.
-
-    @param argv: A list of arguments to pass to C{main}.
-
-    @return: C{None}
-    """
-    stopping = []
-    reactor.addSystemEventTrigger('before', 'shutdown', stopping.append, True)
-    finished = main(reactor, argv, **kw)
-    finished.addErrback(log.err, "main function encountered error")
-    exit = []
-    def cbFinish(ignored):
-        exit.append(ignored)
-        if not stopping:
-            reactor.callWhenRunning(reactor.stop)
-    finished.addCallback(cbFinish)
-    reactor.run()
-    raise SystemExit(exit[0])
 
 
 def update_status_msg(background, msg):
@@ -388,202 +362,13 @@ if MIDI:
 
 
 
-
-
-
-
-try:
-    from espeak import espeak 
-    synth = espeak.synth
-    espeak.set_parameter(espeak.Parameter.Rate, 100)
-    espeak.set_parameter(espeak.Parameter.Volume, 100)
-    #espeak.set_voice('mb-us1')
-    espeak.synth("hello")
-    #print espeak.get_parameter("rate")
-except Exception, e:
-    print e
-    print "no espeak"
-    synth = None
-
-import itertools
-newvoice = itertools.cycle(['en-scottish', 'english', 'lancashire', 'english_rp', 'english_wmids', 'english-us', 'en-westindies']).next
-
-
-espeak_consonants = {(4,): 'n', # consonants
-                   (3,): 't',
-                   (1,): 'r',
-                   (2,): 's',
-                   (5,): 'd',
-                   (1,4): 'l',
-                   (2,3): 'D',
-                   (3,4): 'z',
-                   (1,2): 'm',
-                   (2,3,4): 'k',
-                   (1,3): 'v',
-                   (1,2,3,4): 'w',
-                   (1,2,3): 'p',
-                   (1,5): 'f',
-                   (4,5): 'b',
-                   (2,4): 'h',
-                   (2,3,4,5): 'N',
-                   (1,3,4): 'S',
-                   (3,4,5): 'g',
-                   (1,2,3,4,5): 'j',
-                   (2,5): 'tS',
-                   (1,4,5): 'dZ',
-                   (1,2,4): 'T',
-                   (1,3,4,5): 'Z3'}
-
-espeak_vowels = {(0,): '@', # vowels
-                   (0,4): 'I2',
-                   (0,2): '0',
-                   (0,1): 'I',
-                   (0,3): 'a',
-                   (0,2,3,4): 'E',
-                   (0,2,3): 'i:',
-                   (0,5): 'eI',
-                   (0,3,4): 'V',
-                   (0,2,3,4,5): 'U:',
-                   (0,4,5): 'aI',
-                   (0,3,4,5): 'U',
-                   (0,2,5): '3:',
-                   (0,2,3,5): 'aU',
-                   (0,3,5): 'ju:',
-                   (0,2,4,5): 'OI'}
-
-espeak_phonemes = {}
-espeak_phonemes.update(espeak_vowels)
-espeak_phonemes.update(espeak_consonants)
-
-
-
-class FlushingDecoder:
-
-    def __init__(self, timeout):
-        self.timeout = timeout
-        self.buffer = []
-        self.lastdecode = 0
-
-    def flush(self):
-        if self.buffer:
-            s = ''.join(self.buffer)
-            synth("[[" + s + "]]", phonemes=True)
-            self.buffer = []
-
-    def update(self, ticks):
-        self.ticks = ticks
-        n = self.ticks - self.lastdecode
-        if self.ticks - self.lastdecode > self.timeout:
-            self.flush()
-
-    def decoder(self, b):
-        self.lastdecode = self.ticks
-        l = list(b)
-        l.sort()
-        phone = espeak_phonemes.get(tuple(l), None)
-        if synth is None or phone is None:
-            print phone
-        else:
-            self.buffer.append(phone)
-            print self.buffer
-
-
-
-
-
-
-# f = FlushingDecoder(500)
-# lkeyer = Keyer(f.decoder, 1500)
-# rkeyer = Keyer(f.decoder, 1500)
-# learning = False
-# listeners = []
-# load_keymap()
-# try:
-#     screen = pygame.display.set_mode((800, 600))
-#     pygame.display.set_caption('simplesteno')
-#     pygame.mouse.set_visible(0)
-#     background = pygame.Surface(screen.get_size())
-#     background = background.convert()
-#     background.fill(blue)
-#     helper_text()
-#     screen.blit(background, (0, 0))
-#     pygame.display.flip()
-#     clock = pygame.time.Clock()
-#     while True:
-#         screen.blit(background, (0, 0))
-#         pygame.display.flip()
-
-#         clock.tick(60)
-#         t = pygame.time.get_ticks()
-#         f.update(t)
-#         event = event_poll()
-#         if MIDI:
-#            if piano.poll():
-#                 midi_events = piano.read(10)
-#                 # convert them into pygame events.
-#                 midi_evs = pygame.midi.midis2events(midi_events, piano.device_id)
-
-#                 for m_e in midi_evs:
-#                     event_post( m_e )
-
-
-#         if event.type == pygame.QUIT:
-#             break
-#         if event.type in (KEYDOWN, KEYUP):
-#             key = event.key
-#             z = lookup(key)
-#             if event.type == KEYDOWN:
-#                 if key == pygame.K_ESCAPE:
-#                     break
-#                 if learning:
-#                     newkeymap.append(key)
-#                     if len(newkeymap) == 12:
-#                         learning = False
-#                         updatekeymap(newkeymap, keyboardkeymap)
-#                         update_status_msg('')
-#                         dump_keymap()
-#                         continue
-#                     update_status_msg(_learn_keymap()[0])
-#                 if key == 284:
-#                     newkeymap = []
-#                     learning = True
-#                     update_status_msg(_learn_keymap()[0])
-#                     continue
-#                 for m in listeners:
-#                     m(event)
-#                 if z in RHAND:
-#                     rkeyer.keyDown(z, t)
-#                 if z in LHAND:
-#                     lkeyer.keyDown(z-LHAND[0], t)
-#             if event.type == KEYUP:
-#                 if z in RHAND:
-#                     rkeyer.keyUp(z, t)
-#                 if z in LHAND:
-#                     lkeyer.keyUp(z-LHAND[0], t)
-#         if event.type == MIDIIN:
-#             note, vel = event.data1, event.data2
-#             z = lookup_piano(note)
-#             if vel > 0: # keyDown
-
-#                 if z is not None:
-#                     keyer.keyDown(z, t)
-#             if vel == 0: # keyUp
-#                 if z is not None:
-#                     keyer.keyUp(z, t)
-# finally:
-#     if MIDI:
-#         if piano:
-#             del piano
-#         pygame.midi.quit()
-#     pygame.quit()  # Keep this IDLE friendly 
-
-
 class MulticastClientUDP(DatagramProtocol):
 
     def datagramReceived(self, datagram, address):
         print "Received:" + repr(datagram)
         self.address = address
         print address
+
 
 
 class Helloer(DatagramProtocol):
@@ -600,6 +385,9 @@ class Helloer(DatagramProtocol):
         print "now we can only send to host %s port %d" % (host, port)
         self.transport.write("hello") # no need for address
 
+    def sendDone(self):
+        self.transport.write('done')
+
     def datagramReceived(self, data, (host, port)):
         print "received %r from %s:%d" % (data, host, port)
 
@@ -611,6 +399,7 @@ class Helloer(DatagramProtocol):
     # address to which we are sending.
     def connectionRefused(self):
         print "No one listening"
+
 
 
 class RunOptions(Options):
@@ -669,6 +458,7 @@ def main(reactor, argv):
             w = Window(reactor)
             w.submitTo(Controller(h))
             d = w.go()
+            d.addCallback(lambda a: h.sendDone())
             reactor.listenUDP(0, h)
             return d
 
