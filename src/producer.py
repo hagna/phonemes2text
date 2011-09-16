@@ -1,4 +1,3 @@
-
 from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor
 from twisted.application.internet import MulticastServer
@@ -648,8 +647,9 @@ def parseCmdLine(argv):
 def main(reactor, argv):
     opt = parseCmdLine(argv)
     command = opt.subCommand
-    so = opt.subOptions
     if command == 'udp':
+        so = opt.subOptions
+
         if so['multi']:
             mcastUDP = MulticastClientUDP()
             a = reactor.listenUDP(0, mcastUDP)
@@ -681,6 +681,4 @@ def main(reactor, argv):
 if __name__ == '__main__':
     react(reactor, main, sys.argv)
 
-from twisted.internet.protocol import DatagramProtocol
-from twisted.internet import reactor
 
