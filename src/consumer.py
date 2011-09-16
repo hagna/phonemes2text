@@ -1,4 +1,5 @@
-from producer import FlushingDecoder, react
+from producer import FlushingDecoder
+from common import react
 from twisted.internet.task import LoopingCall
 from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor, defer
