@@ -98,11 +98,51 @@ class FlushingDecoder:
 
 
 
-processProtocol = MyProcessProtocol()
+from twisted.internet import protocol
+from twisted.internet import reactor
+import re, os
+
+class MyPP(protocol.ProcessProtocol):
+
+    def __init__(self):
+        self.data = ''
+
+    def connectionMade(self):
+        print "connectionMade!"
+        for i in range(10):
+            self.transport.write("n 100\n" +
+                                 "EI 100\n" +
+                                 "t 100\n" +
+                                 "_ 100\n")
+        self.transport.closeStdin() # tell them we're done
+    def outReceived(self, data):
+        print "outReceived! with %d bytes!" % len(data)
+        self.data = self.data + data
+    def errReceived(self, data):
+        print "errReceived! with %d bytes!" % len(data)
+        print data
+    def inConnectionLost(self):
+        print "inConnectionLost! stdin is closed! (we probably did it)"
+    def outConnectionLost(self):
+        print "outConnectionLost! The child closed their stdout!"
+        # now is the time to examine what they wrote
+        #print "I saw them write:", self.data
+        print "I saw %s lines" % self.data
+    def errConnectionLost(self):
+        print "errConnectionLost! The child closed their stderr."
+    def processExited(self, reason):
+        print "processExited, status %d" % (reason.value.exitCode,)
+    def processEnded(self, reason):
+        print "processEnded, status %d" % (reason.value.exitCode,)
+        print "quitting"
+        reactor.stop()
+
+
+processProtocol = MyPP()
 executable = '/home/tc/mbrola-linux-i386'
 program = executable
-args = [executable, 'us1/us1', 'us1/TEST/alice.pho', 'woo.wav']
-reactor.spawnProcess(processProtocol, executable, args=[program, arg1, arg2],
+args = [executable, '/home/tc/us1/us1', '-', 'woo.wav']
+reactor.spawnProcess(processProtocol, executable, args=args,
                      env={'HOME': os.environ['HOME']})
 reactor.run()
 #./mbrola-linux-i386 us1/us1 us1/TEST/xmas.pho test.wav
