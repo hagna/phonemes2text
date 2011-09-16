@@ -1,4 +1,4 @@
-from decoder import FlushingDecoder
+from decoder import FlushingDecoder, MbrolaDecoder
 from common import react
 from twisted.internet.task import LoopingCall
 from twisted.internet.protocol import DatagramProtocol
@@ -10,7 +10,7 @@ class Echo(DatagramProtocol):
 
     def __init__(self):
         self.done = defer.Deferred()
-        f = FlushingDecoder(0.500)
+        f = MbrolaDecoder(0.500)
         self.decoder = f.decoder
         def updateF():
             f.update(reactor.seconds())

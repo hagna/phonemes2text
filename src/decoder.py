@@ -1,4 +1,7 @@
-
+from twisted.internet import protocol
+from twisted.internet import reactor, utils
+from twisted.python.filepath import FilePath
+import re, os
 
 try:
     from espeak import espeak 
@@ -98,22 +101,33 @@ class FlushingDecoder:
 
 
 
-from twisted.internet import protocol
-from twisted.internet import reactor
-import re, os
+class MbrolaDecoder(FlushingDecoder):
+    def flush(self):
+        if self.buffer:
+            mbrolaplay(self.buffer)
+            self.buffer = []
+
+        
 
 class MyPP(protocol.ProcessProtocol):
 
-    def __init__(self):
+    aplay = '/usr/local/bin/aplay'
+
+    def __init__(self, fp, buffer):
+        self.fp = fp
         self.data = ''
+        self.phonemes = self.makephonemes(buffer)
+
+    def makephonemes(self, buffer):
+        res = [str(k) + ' 100' for k in buffer]
+        res = '\n'.join(res)
+        print res
+        return res
+
 
     def connectionMade(self):
         print "connectionMade!"
-        for i in range(10):
-            self.transport.write("n 100\n" +
-                                 "EI 100\n" +
-                                 "t 100\n" +
-                                 "_ 100\n")
+        self.transport.write(self.phonemes)
         self.transport.closeStdin() # tell them we're done
     def outReceived(self, data):
         print "outReceived! with %d bytes!" % len(data)
@@ -135,14 +149,21 @@ class MyPP(protocol.ProcessProtocol):
     def processEnded(self, reason):
         print "processEnded, status %d" % (reason.value.exitCode,)
         print "quitting"
-        reactor.stop()
+        d = utils.getProcessOutput(self.aplay, (self.fp.path,), errortoo=True)
+        d.addCallback(lambda a: self.fp.remove())
 
 
-processProtocol = MyPP()
-executable = '/home/tc/mbrola-linux-i386'
-program = executable
-args = [executable, '/home/tc/us1/us1', '-', 'woo.wav']
-reactor.spawnProcess(processProtocol, executable, args=args,
-                     env={'HOME': os.environ['HOME']})
-reactor.run()
-#./mbrola-linux-i386 us1/us1 us1/TEST/xmas.pho test.wav
+def mbrolaplay(buffer):
+    fp = FilePath('.').temporarySibling('.wav')
+    processProtocol = MyPP(fp, buffer)
+    executable = '/home/tc/mbrola-linux-i386'
+    program = executable
+    args = [executable, '/home/tc/us1/us1', '-', fp.path]
+    reactor.spawnProcess(processProtocol, executable, args=args,
+                         env={'HOME': os.environ['HOME']})
+
+
+if __name__ == '__main__':
+    mbrolaplay(['n', 'EI', 't', 'EI'])
+    reactor.run()
+    #./mbrola-linux-i386 us1/us1 us1/TEST/xmas.pho test.wav
