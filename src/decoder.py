@@ -98,3 +98,11 @@ class FlushingDecoder:
 
 
 
+processProtocol = MyProcessProtocol()
+executable = '/home/tc/mbrola-linux-i386'
+program = executable
+args = [executable, 'us1/us1', 'us1/TEST/alice.pho', 'woo.wav']
+reactor.spawnProcess(processProtocol, executable, args=[program, arg1, arg2],
+                     env={'HOME': os.environ['HOME']})
+reactor.run()
+#./mbrola-linux-i386 us1/us1 us1/TEST/xmas.pho test.wav
