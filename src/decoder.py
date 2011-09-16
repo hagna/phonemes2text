@@ -102,8 +102,24 @@ class FlushingDecoder:
 
 
 class MbrolaDecoder(FlushingDecoder):
+    trans = {'I2':'I', '0':'O', 'a':'{', 'e':'E', 'i:':'i', 'eI':'EI',
+             'u:':'u', 'aI':'AI', 'oU':'@U', '3:':'r=', 'ju:':['k', 'j', 'u'],
+             'N':'Z', 'Z3':'Z'} 
+
+    def espeak2mbrola(self, buffer):
+        res = []
+        for i in buffer:
+            new = self.trans.get(i, i)
+            if type(new) == type([]):
+                res += new
+            else:
+                res.append(new)
+        return res
+
+
     def flush(self):
         if self.buffer:
+            self.buffer = self.espeak2mbrola(self.buffer)
             mbrolaplay(self.buffer)
             self.buffer = []
 
@@ -164,6 +180,6 @@ def mbrolaplay(buffer):
 
 
 if __name__ == '__main__':
-    mbrolaplay(['n', 'EI', 't', 'EI'])
+    mbrolaplay(['t'])
     reactor.run()
     #./mbrola-linux-i386 us1/us1 us1/TEST/xmas.pho test.wav
