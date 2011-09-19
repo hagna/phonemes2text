@@ -16,7 +16,7 @@ except:
 
 MIDI=True
 try:
-    pygame.midi
+    import pygame.midi
     from pygame.midi import MIDIIN
 
 except Exception, e:
@@ -128,6 +128,15 @@ class Window(object):
         Retrieve outstanding pygame input events and dispatch them.
         """
         event = self.event.poll()
+        if MIDI:
+            if piano.poll():
+                midi_events = piano.read(10)
+                midi_evs = pygame.midi.midis2events(midi_events, piano.device_id) 
+
+                for m_e in midi_evs:
+                    pygame.fastevent.post( m_e )
+
+
         if event:
             self._handleEvent(event)
 
@@ -136,6 +145,7 @@ class Window(object):
         """
         Handle a single pygame input event.
         """
+        print event
         if event.type == pygame.locals.QUIT or \
                 event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
             self.stop()
@@ -346,8 +356,17 @@ class Controller:
         else:
             self.lkeyer.keyUp(z, t)
 
-
-
+#        if event.type == MIDIIN:
+#            note, vel = event.data1, event.data2
+#            z = lookup_piano(note)
+#            if vel > 0: # keydown
+#
+#                if z is not None:
+#                    keyer.keydown(z, t)
+#            if vel == 0: # keyup
+#                if z is not None:
+#                    keyer.keyup(z, t)
+#
 
 if MIDI:
     device_id = 5
@@ -470,5 +489,6 @@ def main(reactor, argv):
 
 if __name__ == '__main__':
     react(reactor, main, sys.argv)
+
 
 
