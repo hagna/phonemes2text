@@ -13,8 +13,7 @@ try:
 except:
     import simplejson as json
 
-
-MIDI=True
+MIDI=False
 try:
     import pygame.midi
     from pygame.midi import MIDIIN
@@ -127,6 +126,7 @@ class Window(object):
         """
         Retrieve outstanding pygame input events and dispatch them.
         """
+        global piano
         event = self.event.poll()
         if MIDI:
             if piano.poll():
@@ -145,15 +145,11 @@ class Window(object):
         """
         Handle a single pygame input event.
         """
-        print event
         if event.type == pygame.locals.QUIT or \
                 event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
             self.stop()
         elif self.controller is not None:
-            if event.type == pygame.KEYDOWN:
-                self.controller.keyDown(event.key)
-            elif event.type == pygame.KEYUP:
-                self.controller.keyUp(event.key)
+            self.controller.dispatch_event(event)
 #             elif event.type == pygame.MOUSEMOTION:
 #                 if pygame.event.get_grab():
 #                     self.controller.mouseMotion(
@@ -219,16 +215,17 @@ class Keymap:
 
     pianokeymap =  {
                     72:5,
-                    70:4,
-                    68:3,
-                    66:2,
-                    64:1,
-                    62:0,
-                    60:1,
-                    58:2,
-                    56:3,
-                    54:4,
-                    52:5,
+                    71:4,
+                    69:3,
+                    67:2,
+                    65:1,
+                    64:0,
+                    62:6,
+                    60:7,
+                    59:8,
+                    57:9,
+                    55:10,
+                    53:11,
                     }
 
     _learn_keymap = itertools.cycle([('Right hand 5', 5),
@@ -291,7 +288,8 @@ class Keymap:
 
 
     def lookup_piano(self, k):
-        return self.lookup(k, Controller.pianokeymap)
+        res = self.lookup(k, self.pianokeymap)
+        return res
 
 
     newmap = []
@@ -332,6 +330,13 @@ class Controller:
         self.rkeyer = Keyer(f.decoder, 1500)
 
 
+    def dispatch_event(self, event):
+        if event.type == pygame.KEYDOWN:
+            self.keyDown(event.key)
+        elif event.type == pygame.KEYUP:
+            self.keyUp(event.key)
+
+
     def keyDown(self, k):
         if k == pygame.K_F3:
             self.window.submitTo(self.keymap)
@@ -356,28 +361,23 @@ class Controller:
         else:
             self.lkeyer.keyUp(z, t)
 
-#        if event.type == MIDIIN:
-#            note, vel = event.data1, event.data2
-#            z = lookup_piano(note)
-#            if vel > 0: # keydown
-#
-#                if z is not None:
-#                    keyer.keydown(z, t)
-#            if vel == 0: # keyup
-#                if z is not None:
-#                    keyer.keyup(z, t)
-#
 
-if MIDI:
-    device_id = 5
-    pygame.midi.init()
-    if device_id is None:
-        input_id = pygame.midi.get_default_input_id()
-    else:
-        input_id = device_id
 
-    print ("using input_id :%s:" % input_id)
-    piano = pygame.midi.Input( input_id )
+class MidiController(Controller):
+    def __init__(self, *a, **kw):
+        Controller.__init__(self, *a, **kw)
+        self.lookup = self.keymap.lookup_piano
+   
+
+    def dispatch_event(self, event):
+        if event.type == MIDIIN:
+            note, status = event.data1, event.status
+            if status == 144: # keydown
+                self.keyDown(note)
+            if status == 128: # keyup
+                self.keyUp(note)
+
+
 
 
 
@@ -438,10 +438,32 @@ class StartOptions(Options):
     def getSynopsis(self):
         return """Usage: %s scan|fetch|put""" % __file__
 
+
+    optParameters = [('midi', 'm', None, 'Midi channel to use. python -m pygame.examples.midi --list to see possibilities')]
+
     subCommands = [
         ('udp', None, RunOptions, 'Send phonemes over the network.'),
         ]
 
+
+def midi_or_keyboard(opt):
+    global MIDI, piano
+    midi = opt.get('midi')
+    if midi is None:
+        return Controller
+    device_id = int(midi)
+    pygame.midi.init()
+    if device_id is None:
+        input_id = pygame.midi.get_default_input_id()
+    else:
+        input_id = device_id
+
+    print ("using input_id :%s:" % input_id)
+    piano = pygame.midi.Input( input_id )
+
+
+    MIDI=True
+    return MidiController
 
 def parseCmdLine(argv):
     opt = StartOptions()
@@ -455,6 +477,7 @@ def parseCmdLine(argv):
 def main(reactor, argv):
     opt = parseCmdLine(argv)
     command = opt.subCommand
+    controller = midi_or_keyboard(opt)
     if command == 'udp':
         so = opt.subOptions
 
@@ -469,13 +492,13 @@ def main(reactor, argv):
                     self.a.write(str(b), ('224.0.0.1', 8005))
 
             w = Window(reactor)
-            w.submitTo(Controller(Decoder(a)))
+            w.submitTo(controller(Decoder(a)))
             d = w.go()
             return d
         else: 
             h = Helloer(so.host, so.port)            
             w = Window(reactor)
-            w.submitTo(Controller(h))
+            w.submitTo(controller(h))
             d = w.go()
             d.addCallback(lambda a: h.sendDone())
             reactor.listenUDP(0, h)
@@ -483,7 +506,7 @@ def main(reactor, argv):
 
     else:
         w = Window(reactor)
-        w.submitTo(Controller())
+        w.submitTo(controller())
         d = w.go()
         return d
 
