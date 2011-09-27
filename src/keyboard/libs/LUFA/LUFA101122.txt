@@ -1,0 +1,27 @@
+This directory contains the 2010-11-22 LUFA distribution
+with the following modifications:
+
+
+Files Added:
+
+* Defines missing from certain versions of avr-gcc
+  ./LUFA/MissingDefines.h
+
+* Defines related to Micropendous and Micropendous-DIP boards (SRAM, TXB0108, USB switch)
+  ./LUFA/UsefulMicropendousDefines.h
+
+* General purpose includes for boards with no LEDs and just an HWB button
+  ./LUFA/Drivers/Board/Board/..
+
+* Includes for Micropendous boards
+  ./LUFA/Drivers/Board/Micropendous/..
+
+
+
+Files Changed:
+
+  ./LUFA/Drivers/Board/Buttons.h
+  ./LUFA/Drivers/Board/LEDs.h
+  ./LUFA/Drivers/Board/Joystick.h
+  ./LUFA/Common/BoardTypes.h
+  ./LUFA/Drivers/USB/LowLevel/Host.c

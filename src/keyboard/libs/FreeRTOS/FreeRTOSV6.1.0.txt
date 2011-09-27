@@ -1,0 +1,2 @@
+This directory contains a copy of FreeRTOS v6.1.0
+stripped of all files not related to the USB AVRs.

@@ -7,3 +7,5 @@
 *.dep/*/**
 *.hex
 *.sym
+*.pyc
+*.swp
