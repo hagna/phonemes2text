@@ -1,3 +1,9 @@
-*.pyc
-_trial_temp
-
+*.o
+*.a
+*.elf
+*.map
+*.lss
+*.lst
+*.dep/*/**
+*.hex
+*.sym
