@@ -45,6 +45,7 @@
 		#include <string.h>
 
 		#include "Descriptors.h"
+		#include "RingBuff.h"
 
 		#include <LUFA/Version.h>
 		#include <LUFA/Drivers/Board/Joystick.h>
@@ -84,5 +85,11 @@
 		                                          const uint8_t ReportType,
 		                                          const void* ReportData,
 		                                          const uint16_t ReportSize);
+        typedef struct {
+            uint8_t cur;
+            uint8_t prev;
+            uint8_t buf;
+            uint32_t maxtime;
+        } STENO;
 
 #endif // _MICROPENDOUS_KEYBOARD_TEST_H_

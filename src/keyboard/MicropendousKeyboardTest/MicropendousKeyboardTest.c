@@ -63,13 +63,32 @@ USB_ClassInfo_HID_Device_t Keyboard_HID_Interface =
 			},
     };
 
+#define NSTENO 3
+#define TSTAMP ((uint32_t)Timer1OverflowCount << 16) + (uint32_t)TCNT1 
+#define KEYUP_INTERVAL 3000
+
+
+RingBuff_t debug_buffer;
+RingBuff_t steno_buffer;
+
+STENO steno[NSTENO] = { {.cur = 0, .prev = 0, .maxtime = 0, .buf = 0},
+                        {.cur = 0, .prev = 0, .maxtime = 0, .buf = 0},
+                        {.cur = 0, .prev = 0, .maxtime = 0, .buf = 0},
+
+};
 /** Main program entry point. This routine contains the overall program flow, including initial
  *  setup of all components and the main program loop.
  */
 int main(void)
 {
 	SetupHardware();
-    
+ 
+    for (int i=0; i<NSTENO; i++) {
+        steno[i].maxtime = TSTAMP;
+    }
+    Buffer_Initialize(&debug_buffer);
+    Buffer_Initialize(&steno_buffer);
+
 	LEDs_SetAllLEDs(LEDMASK_USB_NOTREADY);
 	sei();
 
@@ -186,6 +205,7 @@ void SetupHardware()
 /* Timer1 overflow interrupt */
 ISR(TIMER1_OVF_vect) {    
         Timer1OverflowCount++;
+
 }
 
 
@@ -225,6 +245,17 @@ void EVENT_USB_Device_StartOfFrame(void)
 	HID_Device_MillisecondElapsed(&Keyboard_HID_Interface);
 }
 
+
+int check_interval(uint32_t maxtime) {
+    // returns False if maxtime is outside of the interval
+    // otherwise True
+    uint32_t t = TSTAMP;
+    if (t < maxtime) { // overflow
+        return ((maxtime - t) > KEYUP_INTERVAL);
+    } 
+    return ((t - maxtime) > KEYUP_INTERVAL);
+}
+
 /** HID class driver callback function for the creation of HID reports to the host.
  *
  *  \param[in]     HIDInterfaceInfo  Pointer to the HID class interface configuration structure being referenced
@@ -240,6 +271,55 @@ bool CALLBACK_HID_Device_CreateHIDReport(USB_ClassInfo_HID_Device_t* const HIDIn
 {
 	USB_KeyboardReport_Data_t* KeyboardReport = (USB_KeyboardReport_Data_t*)ReportData;
 
+	if (debug_buffer.Elements) {
+		uint16_t t = Buffer_GetElement(&debug_buffer);
+		KeyboardReport->Modifier = (t & 0xff00) >> 8;
+		KeyboardReport->KeyCode[0] = t & 0x00ff;
+	} 
+	if (steno_buffer.Elements) {
+		uint16_t t = Buffer_GetElement(&steno_buffer);
+		KeyboardReport->Modifier = (t & 0xff00) >> 8;
+		KeyboardReport->KeyCode[0] = t & 0x00ff;
+	}
+    for (int i=0; i<2; i++) {
+        STENO *hand;
+        hand = &steno[i];
+        if (i == 0) {
+            hand->cur = ~PINB;  // 0 == keyup 
+        } else {
+            hand->cur = ~PIND;
+        }
+        if ((hand->cur == 0) && (hand->buf != 0)) {
+            //flush buffer all keys are up
+            Buffer_StoreElement(&debug_buffer, HID_KEYBOARD_SC_F);
+            Buffer_StoreElement(&steno_buffer, HID_KEYBOARD_SC_A + hand->buf);
+            hand->buf = 0;
+        } else {
+            uint8_t d = hand->cur ^ hand->prev;
+            hand->prev = hand->cur;
+            for (int j=0; j<8; j++) {
+                if (d & (1 << j)) { // d(j) == 1
+                    // detected a change 
+                    Buffer_StoreElement(&debug_buffer, HID_KEYBOARD_SC_H);
+                    if (hand->cur & (1 << j)) { // cur(j) == 0
+                        //keyup
+                        Buffer_StoreElement(&debug_buffer, HID_KEYBOARD_SC_U);
+                        //if (check_interval(hand->maxtime)) {
+                        if (0) {
+                            //clear buffer
+                            hand->buf = 0;
+                            Buffer_StoreElement(&debug_buffer, HID_KEYBOARD_SC_R);
+                        }
+                        // add to buffer
+                        Buffer_StoreElement(&debug_buffer, HID_KEYBOARD_SC_D);
+                        hand->maxtime = TSTAMP;
+                        hand->buf |= 1 << j;
+              
+                    } // end if keyup
+                } // end if changed 
+            } // end looping through changes
+        } 
+    } // end looping through pads
 	//uint8_t JoyStatus_LCL    = Joystick_GetStatus();
 	//uint8_t ButtonStatus_LCL = Buttons_GetStatus();
 
@@ -254,7 +334,7 @@ bool CALLBACK_HID_Device_CreateHIDReport(USB_ClassInfo_HID_Device_t* const HIDIn
 		} else if (~PINB & (1 << PINB1)) {
 			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_B;
 			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_1_AND_EXCLAMATION;
-		} else if (~PINB & (1 << PINB2)) {
+		 else if (~PINB & (1 << PINB2)) {
 			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_B;
 			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_2_AND_AT;
 		} else if (~PINB & (1 << PINB3)) {
@@ -319,89 +399,6 @@ bool CALLBACK_HID_Device_CreateHIDReport(USB_ClassInfo_HID_Device_t* const HIDIn
 
 	// 44-pin USB AVRs
 	#if (defined(__AVR_ATmega16U4__)  || defined(__AVR_ATmega32U4__))
-				  if (~PINB & (1 << PINB0)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_B;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_0_AND_CLOSING_PARENTHESIS;
-		} else if (~PINB & (1 << PINB1)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_B;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_1_AND_EXCLAMATION;
-		} else if (~PINB & (1 << PINB2)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_B;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_2_AND_AT;
-		} else if (~PINB & (1 << PINB3)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_B;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_3_AND_HASHMARK;
-		} else if (~PINB & (1 << PINB4)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_C;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_4_AND_DOLLAR;
-		} else if (~PINB & (1 << PINB5)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_B;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_5_AND_PERCENTAGE;
-		} else if (~PINB & (1 << PINB6)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_B;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_6_AND_CARET;
-		} else if (~PINB & (1 << PINB7)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_B;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_7_AND_AND_AMPERSAND;
-
-		} else if (~PINC & (1 << PINC6)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_C;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_6_AND_CARET;
-		} else if (~PINC & (1 << PINC7)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_C;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_7_AND_AND_AMPERSAND;
-
-		} else if (~PIND & (1 << PIND0)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_D;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_0_AND_CLOSING_PARENTHESIS;
-		} else if (~PIND & (1 << PIND1)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_D;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_1_AND_EXCLAMATION;
-		} else if (~PIND & (1 << PIND2)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_D;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_2_AND_AT;
-		} else if (~PIND & (1 << PIND3)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_D;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_3_AND_HASHMARK;
-		} else if (~PIND & (1 << PIND4)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_D;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_4_AND_DOLLAR;
-		} else if (~PIND & (1 << PIND5)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_D;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_5_AND_PERCENTAGE;
-		} else if (~PIND & (1 << PIND6)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_D;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_6_AND_CARET;
-		} else if (~PIND & (1 << PIND7)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_D;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_7_AND_AND_AMPERSAND;
-
-		} else if (~PINE & (1 << PINE2)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_E;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_2_AND_AT;
-		} else if (~PINE & (1 << PINE6)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_E;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_6_AND_CARET;
-
-		} else if (~PINF & (1 << PINF0)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_F;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_0_AND_CLOSING_PARENTHESIS;
-		} else if (~PINF & (1 << PINF1)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_F;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_1_AND_EXCLAMATION;
-		} else if (~PINF & (1 << PINF4)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_F;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_4_AND_DOLLAR;
-		} else if (~PINF & (1 << PINF5)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_F;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_5_AND_PERCENTAGE;
-		} else if (~PINF & (1 << PINF6)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_F;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_6_AND_CARET;
-		} else if (~PINF & (1 << PINF7)) {
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_F;
-			KeyboardReport->KeyCode[UsedKeyCodes++] = HID_KEYBOARD_SC_7_AND_AND_AMPERSAND;
-		}
 	#endif // 44-pin USB AVRs
 
 
