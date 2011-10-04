@@ -256,6 +256,20 @@ int check_interval(uint32_t maxtime) {
     return ((t - maxtime) > KEYUP_INTERVAL);
 }
 
+void KeyupBuffer_to_Steno(uint8_t buf) {
+    switch ( buf ) {
+        case 0b00010000:
+            Buffer_StoreElement(&steno_buffer, HID_KEYBOARD_SC_N);
+            break;
+       default:
+            Buffer_StoreElement(&steno_buffer, HID_KEYBOARD_SC_U);
+            Buffer_StoreElement(&steno_buffer, HID_KEYBOARD_SC_N);
+            Buffer_StoreElement(&steno_buffer, HID_KEYBOARD_SC_K);
+
+            break;
+    }
+}
+
 /** HID class driver callback function for the creation of HID reports to the host.
  *
  *  \param[in]     HIDInterfaceInfo  Pointer to the HID class interface configuration structure being referenced
@@ -292,7 +306,7 @@ bool CALLBACK_HID_Device_CreateHIDReport(USB_ClassInfo_HID_Device_t* const HIDIn
         if ((hand->cur == 0) && (hand->buf != 0)) {
             //flush buffer all keys are up
             Buffer_StoreElement(&debug_buffer, HID_KEYBOARD_SC_F);
-            Buffer_StoreElement(&steno_buffer, HID_KEYBOARD_SC_A + hand->buf);
+            KeyupBuffer_to_Steno(hand->buf);
             hand->buf = 0;
         } else {
             uint8_t d = hand->cur ^ hand->prev;
