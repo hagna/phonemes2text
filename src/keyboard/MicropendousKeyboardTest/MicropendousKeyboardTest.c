@@ -205,6 +205,8 @@ void SetupHardware()
 /* Timer1 overflow interrupt */
 ISR(TIMER1_OVF_vect) {    
         Timer1OverflowCount++;
+//        Buffer_StoreElement(&debug_buffer, HID_KEYBOARD_SC_T);
+        //Buffer_StoreElement(&debug_buffer, HID_KEYBOARD_SC_0_AND_CLOSING_PARENTHESIS + Timer1OverflowCount);
 
 }
 
@@ -251,21 +253,20 @@ int check_interval(uint32_t maxtime) {
     // otherwise True
     uint32_t t = TSTAMP;
     if (t < maxtime) { // overflow
-        return ((maxtime - t) > KEYUP_INTERVAL);
+        return (((0xffffffff - maxtime) + t) > KEYUP_INTERVAL);
     } 
     return ((t - maxtime) > KEYUP_INTERVAL);
 }
 
 void KeyupBuffer_to_Steno(uint8_t buf) {
     switch ( buf ) {
-        case 0b00010000:
-            Buffer_StoreElement(&steno_buffer, HID_KEYBOARD_SC_N);
+       case 0b00010000:
+            Buffer_StoreElement(&debug_buffer, HID_KEYBOARD_SC_N);
             break;
        default:
-            Buffer_StoreElement(&steno_buffer, HID_KEYBOARD_SC_U);
-            Buffer_StoreElement(&steno_buffer, HID_KEYBOARD_SC_N);
-            Buffer_StoreElement(&steno_buffer, HID_KEYBOARD_SC_K);
-
+            Buffer_StoreElement(&debug_buffer, HID_KEYBOARD_SC_SPACE);
+            Buffer_StoreElement(&debug_buffer, HID_KEYBOARD_SC_A + buf);
+            Buffer_StoreElement(&debug_buffer, HID_KEYBOARD_SC_SPACE);
             break;
     }
 }
@@ -285,16 +286,18 @@ bool CALLBACK_HID_Device_CreateHIDReport(USB_ClassInfo_HID_Device_t* const HIDIn
 {
 	USB_KeyboardReport_Data_t* KeyboardReport = (USB_KeyboardReport_Data_t*)ReportData;
 
-	if (debug_buffer.Elements) {
-		uint16_t t = Buffer_GetElement(&debug_buffer);
-		KeyboardReport->Modifier = (t & 0xff00) >> 8;
-		KeyboardReport->KeyCode[0] = t & 0x00ff;
-	} 
+	uint8_t UsedKeyCodes = 0;
+
 	if (steno_buffer.Elements) {
 		uint16_t t = Buffer_GetElement(&steno_buffer);
 		KeyboardReport->Modifier = (t & 0xff00) >> 8;
-		KeyboardReport->KeyCode[0] = t & 0x00ff;
+		KeyboardReport->KeyCode[UsedKeyCodes++] = t & 0x00ff;
 	}
+	if (debug_buffer.Elements) {
+		uint16_t t = Buffer_GetElement(&debug_buffer);
+		KeyboardReport->Modifier = (t & 0xff00) >> 8;
+		KeyboardReport->KeyCode[UsedKeyCodes++] = t & 0x00ff;
+    }
     for (int i=0; i<2; i++) {
         STENO *hand;
         hand = &steno[i];
@@ -315,11 +318,11 @@ bool CALLBACK_HID_Device_CreateHIDReport(USB_ClassInfo_HID_Device_t* const HIDIn
                 if (d & (1 << j)) { // d(j) == 1
                     // detected a change 
                     Buffer_StoreElement(&debug_buffer, HID_KEYBOARD_SC_H);
-                    if (hand->cur & (1 << j)) { // cur(j) == 0
+                    if ((hand->cur & (1 << j)) == 0) { // cur(j) == 0
                         //keyup
                         Buffer_StoreElement(&debug_buffer, HID_KEYBOARD_SC_U);
-                        //if (check_interval(hand->maxtime)) {
-                        if (0) {
+                        if (check_interval(hand->maxtime)) {
+                        //if (0) {
                             //clear buffer
                             hand->buf = 0;
                             Buffer_StoreElement(&debug_buffer, HID_KEYBOARD_SC_R);
@@ -337,7 +340,6 @@ bool CALLBACK_HID_Device_CreateHIDReport(USB_ClassInfo_HID_Device_t* const HIDIn
 	//uint8_t JoyStatus_LCL    = Joystick_GetStatus();
 	//uint8_t ButtonStatus_LCL = Buttons_GetStatus();
 
-	uint8_t UsedKeyCodes = 0;
 
 	// 32-pin USB AVRs
 	#if (defined(__AVR_AT90USB162__) || defined(__AVR_AT90USB82__) || \

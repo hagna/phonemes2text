@@ -4,7 +4,7 @@
 *.map
 *.lss
 *.lst
-*.dep/*/**
+.dep/*
 *.hex
 *.sym
 *.pyc
