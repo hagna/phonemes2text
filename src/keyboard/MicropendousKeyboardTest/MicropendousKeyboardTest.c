@@ -306,11 +306,7 @@ bool CALLBACK_HID_Device_CreateHIDReport(USB_ClassInfo_HID_Device_t* const HIDIn
         } else {
             hand->cur = ~PIND;
         }
-        if ((hand->cur == 0) && (hand->buf != 0)) {
-            //flush buffer all keys are up
-            Buffer_StoreElement(&debug_buffer, HID_KEYBOARD_SC_F);
-            KeyupBuffer_to_Steno(hand->buf);
-            hand->buf = 0;
+        if (0) {
         } else {
             uint8_t d = hand->cur ^ hand->prev;
             hand->prev = hand->cur;
@@ -331,7 +327,12 @@ bool CALLBACK_HID_Device_CreateHIDReport(USB_ClassInfo_HID_Device_t* const HIDIn
                         Buffer_StoreElement(&debug_buffer, HID_KEYBOARD_SC_D);
                         hand->maxtime = TSTAMP;
                         hand->buf |= 1 << j;
-              
+                        if ((hand->cur == 0) && (hand->buf != 0)) {
+                            //flush buffer all keys are up
+                            Buffer_StoreElement(&debug_buffer, HID_KEYBOARD_SC_F);
+                            KeyupBuffer_to_Steno(hand->buf);
+                            hand->buf = 0;            
+                        } // end flush
                     } // end if keyup
                 } // end if changed 
             } // end looping through changes
