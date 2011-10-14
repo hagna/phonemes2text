@@ -5,10 +5,10 @@ from twisted.python.procutils import which
 import re, os
 
 
-def osx_say(buf):
+def osx_say(buf, mode='[[inpt PHON]]'):
     processProtocol = MyPP()
     executable = saycmd
-    args = [executable, '[[inpt PHON]] ' + ''.join(buf)]
+    args = [executable, mode + ''.join(buf)]
     reactor.spawnProcess(processProtocol, executable, args=args,
                          env={'HOME': os.environ['HOME']})
 
@@ -120,6 +120,7 @@ class FlushingDecoder:
         else:
             self.buf.append(phone)
             print self.buf
+        return phone
 
 
 

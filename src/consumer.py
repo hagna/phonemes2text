@@ -38,16 +38,40 @@ class Quiz(Echo):
 
     quiz = ['r', 's', 't', 'd', 'n']
 
-    def ask(self):
+    annoy = 0.13
+    initial = 1.0
+    minscale = 0.17
+
+
+    def makeanswer(self):
         self.answer = self.r.choice(self.quiz)
-        osx_say(self.answer)
+        self.mindelay = self.minscale * len(self.answer)
+
+
+    def ask(self):
+        if self.answered:
+            self.answered = False
+            self.delay = self.initial
+            self.makeanswer()
+        else:
+            print self.delay
+            osx_say(self.answer, mode='')
+            if self.delay > self.mindelay:
+                self.delay -= self.delay * self.annoy
+        self.question = reactor.callLater(self.delay, self.ask)
 
 
     def __init__(self, *a, **kw):
         Echo.__init__(self, *a, **kw)
-        r = random.Random()
-        self.question = LoopingCall(self.ask)
-        self.question.start(1, now=False)
+        quiz = kw.get('quiz', None)
+        if quiz is not None:
+            self.quiz = quiz
+        
+        self.r = random.Random()
+        self.answered = False
+        self.makeanswer()
+        self.delay = self.initial
+        self.question = reactor.callLater(self.delay, self.ask)
 
 
     def datagramReceived(self, data, (host, port)):
@@ -56,7 +80,10 @@ class Quiz(Echo):
             self.done.callback(None)
         try:
             r = [int(k) for k in data.split(' ')]
-            self.decoder(r)
+            a = self.decoder(r)
+            print a
+            if a == self.answer:
+                self.answered = True
         except Exception, e:
             print e
         #self.transport.write(data, (host, port))
