@@ -423,7 +423,7 @@ class Helloer(DatagramProtocol):
 
 class RunOptions(Options):
     def getSynopsis(self):
-        return """port fqdn"""
+        return """fqdn port"""
 
     optFlags = [('multi', 'm', 'Enable multicast')]
 
