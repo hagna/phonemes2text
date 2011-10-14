@@ -1,4 +1,4 @@
-from decoder import FlushingDecoder, MbrolaDecoder
+from decoder import FlushingDecoder, MbrolaDecoder, OSXSayDecoder
 from common import react
 from twisted.internet.task import LoopingCall
 from twisted.internet.protocol import DatagramProtocol
@@ -8,9 +8,12 @@ import sys
 
 class Echo(DatagramProtocol):
 
-    def __init__(self):
+    def __init__(self, decoder=None):
         self.done = defer.Deferred()
-        f = MbrolaDecoder(0.500)
+        if decoder is None:
+            f = MbrolaDecoder(0.500)
+        else:
+            f = decoder
         self.decoder = f.decoder
         def updateF():
             f.update(reactor.seconds())
@@ -34,7 +37,8 @@ class RunOptions(Options):
     def getSynopsis(self):
         return """port"""
 
-    optFlags = [('multi', 'm', 'Enable multicast')]
+    optFlags = [('multi', 'm', 'Enable multicast'),
+                ('say', 's', 'Use say command (for osx)')]
 
 
     def parseArgs(self, port):
@@ -47,7 +51,7 @@ class StartOptions(Options):
         return """Usage: %s""" % __file__
 
     subCommands = [
-        ('udp', None, RunOptions, 'Send phonemes over the network.'),
+        ('udp', None, RunOptions, 'Receive phonemes from udp network.'),
         ]
 
 
@@ -65,9 +69,16 @@ def main(reactor, argv):
     command = opt.subCommand
     if command == 'udp':
         so = opt.subOptions
-        e = Echo()
-        reactor.listenUDP(so.port, e)
-        return e.done
+        if so['say']:
+            e = Echo(OSXSayDecoder(0.500))
+            reactor.listenUDP(so.port, e)
+            return e.done
+        else:
+            e = Echo()
+            reactor.listenUDP(so.port, e)
+            return e.done
+    else:
+        return defer.succeed(None)
 
 
 if __name__ == '__main__':
