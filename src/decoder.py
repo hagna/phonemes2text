@@ -4,6 +4,22 @@ from twisted.python.filepath import FilePath
 from twisted.python.procutils import which
 import re, os
 
+
+def osx_say(buf):
+    processProtocol = MyPP()
+    executable = saycmd
+    args = [executable, '[[inpt PHON]] ' + ''.join(buf)]
+    reactor.spawnProcess(processProtocol, executable, args=args,
+                         env={'HOME': os.environ['HOME']})
+
+
+
+try:
+    saycmd = which('say')[0]
+except:
+    saycmd = None
+
+
 try:
     from espeak import espeak 
     synth = espeak.synth
@@ -13,9 +29,11 @@ try:
     espeak.synth("hello")
     #print espeak.get_parameter("rate")
 except Exception, e:
-    print e
-    print "no espeak"
-    synth = None
+    if saycmd is not None:
+        synth = osx_say
+    else:
+        print e
+        synth = None
 
 import itertools
 newvoice = itertools.cycle(['en-scottish', 'english', 'lancashire', 'english_rp', 'english_wmids', 'english-us', 'en-westindies']).next
@@ -186,32 +204,31 @@ class OSXSayDecoder(FlushingDecoder):
 
 class MyPP(protocol.ProcessProtocol):
 
+    data = ''
 
     def connectionMade(self):
-        print "connectionMade!"
-        self.transport.write(self.phonemes)
         self.transport.closeStdin() # tell them we're done
-    def outReceived(self, data):
-        print "outReceived! with %d bytes!" % len(data)
-        self.data = self.data + data
-    def errReceived(self, data):
-        print "errReceived! with %d bytes!" % len(data)
-        print data
-    def inConnectionLost(self):
-        print "inConnectionLost! stdin is closed! (we probably did it)"
-    def outConnectionLost(self):
-        print "outConnectionLost! The child closed their stdout!"
-        # now is the time to examine what they wrote
-        #print "I saw them write:", self.data
-        print "I saw %s lines" % self.data
-    def errConnectionLost(self):
-        print "errConnectionLost! The child closed their stderr."
-    def processExited(self, reason):
-        print "processExited, status %d" % (reason.value.exitCode,)
-    def processEnded(self, reason):
-        print "processEnded, status %d" % (reason.value.exitCode,)
-        print "quitting"
 
+    def outReceived(self, data):
+        self.data = self.data + data
+
+    def errReceived(self, data):
+        print data
+
+    def inConnectionLost(self):
+        pass
+
+    def outConnectionLost(self):
+        pass
+
+    def errConnectionLost(self):
+        pass
+
+    def processExited(self, reason):
+        pass
+
+    def processEnded(self, reason):
+        pass
 
 
 class MbrolaPP(MyPP):
@@ -236,14 +253,6 @@ class MbrolaPP(MyPP):
 
  
 
-def osx_say(buf):
-    processProtocol = MyPP()
-    executable = which('say')
-    args = [executable, '[[inpt PHO]] ' + ''.join(buf)]
-    reactor.spawnProcess(processProtocol, executable, args=args,
-                         env={'HOME': os.environ['HOME']})
-
-
 def mbrolaplay(buf):
     fp = FilePath('.').temporarySibling('.wav')
     processProtocol = MbrolaPP(fp, buf)
@@ -256,6 +265,6 @@ def mbrolaplay(buf):
 
 
 if __name__ == '__main__':
-    osx_say(['h','EH', 'l', 'AW'])
+    osx_say(['h','EH', 'l', 'OW'])
     reactor.run()
     #./mbrola-linux-i386 us1/us1 us1/TEST/xmas.pho test.wav
