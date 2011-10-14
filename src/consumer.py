@@ -47,6 +47,9 @@ class Quiz(Echo):
         self.answer = self.r.choice(self.quiz)
         self.mindelay = self.minscale * len(self.answer)
 
+    def decreasedelay(self):
+        self.delay -= self.delay * self.annoy
+
 
     def ask(self):
         if self.answered:
@@ -54,10 +57,9 @@ class Quiz(Echo):
             self.delay = self.initial
             self.makeanswer()
         else:
-            print self.delay
             osx_say(self.answer, mode='')
             if self.delay > self.mindelay:
-                self.delay -= self.delay * self.annoy
+                self.decreasedelay()
         self.question = reactor.callLater(self.delay, self.ask)
 
 
@@ -81,9 +83,14 @@ class Quiz(Echo):
         try:
             r = [int(k) for k in data.split(' ')]
             a = self.decoder(r)
-            print a
             if a == self.answer:
                 self.answered = True
+            else:
+                self.question.cancel()
+                self.decreasedelay()
+                self.decreasedelay()
+                self.decreasedelay()
+                self.ask()
         except Exception, e:
             print e
         #self.transport.write(data, (host, port))
@@ -129,7 +136,7 @@ def main(reactor, argv):
         so = opt.subOptions
         if so['say']:
             if so['quiz']:
-                e = Quiz(OSXSayDecoder(0.500))
+                e = Quiz(OSXSayDecoder(0.500, nosound=True))
                 reactor.listenUDP(so.port, e)
                 return e.done
             else:

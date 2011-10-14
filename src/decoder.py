@@ -90,10 +90,13 @@ espeak_phonemes.update(espeak_consonants)
 
 class FlushingDecoder:
 
-    def __init__(self, timeout):
+    def __init__(self, timeout, nosound=False):
+        global synth
         self.timeout = timeout
         self.buf = []
         self.lastdecode = 0
+        if nosound:
+            synth = None
 
     def flush(self):
         if self.buf:
