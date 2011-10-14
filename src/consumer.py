@@ -1,9 +1,10 @@
-from decoder import FlushingDecoder, MbrolaDecoder, OSXSayDecoder
+from decoder import FlushingDecoder, MbrolaDecoder, OSXSayDecoder, osx_say
 from common import react
 from twisted.internet.task import LoopingCall
 from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor, defer
 from twisted.python.usage import Options, UsageError
+import random
 import sys
 
 class Echo(DatagramProtocol):
@@ -33,12 +34,42 @@ class Echo(DatagramProtocol):
         #self.transport.write(data, (host, port))
 
 
+class Quiz(Echo):
+
+    quiz = ['r', 's', 't', 'd', 'n']
+
+    def ask(self):
+        self.answer = self.r.choice(self.quiz)
+        osx_say(self.answer)
+
+
+    def __init__(self, *a, **kw):
+        Echo.__init__(self, *a, **kw)
+        r = random.Random()
+        self.question = LoopingCall(self.ask)
+        self.question.start(1, now=False)
+
+
+    def datagramReceived(self, data, (host, port)):
+        #print "received %r from %s:%d" % (data, host, port)
+        if data == 'done':
+            self.done.callback(None)
+        try:
+            r = [int(k) for k in data.split(' ')]
+            self.decoder(r)
+        except Exception, e:
+            print e
+        #self.transport.write(data, (host, port))
+
+
+
 class RunOptions(Options):
     def getSynopsis(self):
         return """port"""
 
     optFlags = [('multi', 'm', 'Enable multicast'),
-                ('say', 's', 'Use say command (for osx)')]
+                ('say', 's', 'Use say command (for osx)'),
+                ('quiz', 'q', 'quiz mode')]
 
 
     def parseArgs(self, port):
@@ -70,9 +101,14 @@ def main(reactor, argv):
     if command == 'udp':
         so = opt.subOptions
         if so['say']:
-            e = Echo(OSXSayDecoder(0.500))
-            reactor.listenUDP(so.port, e)
-            return e.done
+            if so['quiz']:
+                e = Quiz(OSXSayDecoder(0.500))
+                reactor.listenUDP(so.port, e)
+                return e.done
+            else:
+                e = Echo(OSXSayDecoder(0.500))
+                reactor.listenUDP(so.port, e)
+                return e.done
         else:
             e = Echo()
             reactor.listenUDP(so.port, e)
