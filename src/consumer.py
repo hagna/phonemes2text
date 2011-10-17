@@ -36,7 +36,16 @@ class Echo(DatagramProtocol):
 
 class Quiz(Echo):
 
-    quiz = ['r', 's', 't', 'd', 'n']
+
+
+    answermap = {'IH': 'bit',
+                 'AO': 'caught',
+                 'AE': 'bat',
+                 'IX': 'roses',
+                 'EY': 'bait',
+           
+                 }
+    quiz = ['r', 's', 't', 'd', 'n'] 
 
     annoy = 0.13
     initial = 1.0
@@ -49,6 +58,17 @@ class Quiz(Echo):
 
     def decreasedelay(self):
         self.delay -= self.delay * self.annoy
+
+
+    def isanswer(self, b):
+        res = self.answer == b
+        #print "b is '%s'" % b
+        #print "self.answer is '%s'" % self.answer
+        if res:
+            return res
+        v = self.answermap.get(b, None)
+        #print "v is '%s'" % v
+        return v == self.answer
 
 
     def ask(self):
@@ -68,6 +88,7 @@ class Quiz(Echo):
         quiz = kw.get('quiz', None)
         if quiz is not None:
             self.quiz = quiz
+        self.quiz += self.answermap.values()
         
         self.r = random.Random()
         self.answered = False
@@ -83,7 +104,7 @@ class Quiz(Echo):
         try:
             r = [int(k) for k in data.split(' ')]
             a = self.decoder(r)
-            if a == self.answer:
+            if self.isanswer(a):
                 self.answered = True
             else:
                 self.question.cancel()
